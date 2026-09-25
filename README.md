@@ -26,10 +26,21 @@ statt nur kaputte Player zu zeigen.
 
 ## Deploy auf GitHub Pages
 
-1. Repo auf GitHub anlegen und diesen Ordner committen/pushen.
-2. In den Repo-Einstellungen unter **Pages** als Quelle den Branch (z. B. `main`)
-   und das Root-Verzeichnis auswählen.
-3. Fertig — die Seite ist rein statisch, es ist kein Build-Schritt nötig.
+1. In den Repo-Einstellungen unter **Pages** als Quelle *Deploy from a branch*,
+   Branch `main` und das Root-Verzeichnis `/` auswählen.
+2. Fertig — die Seite ist rein statisch, es ist kein Build-Schritt nötig. Die
+   leere Datei `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert
+   ausliefert, statt sie durch Jekyll zu schicken.
+
+Über Pages läuft die App unter `https://<user>.github.io/<repo>/` — damit ist die
+Referer-Voraussetzung von YouTube erfüllt und die Player funktionieren (siehe
+Fehlerbehebung).
+
+**Bei einem privaten Repo** ist Pages nicht in jedem Plan enthalten (mit einem
+kostenlosen Account nur für öffentliche Repos), und selbst wenn der Plan es
+erlaubt, ist die veröffentlichte Seite öffentlich erreichbar — privat abgesicherte
+Pages-Seiten gibt es nur mit GitHub Enterprise Cloud. Ob es geht, zeigt die
+Pages-Einstellungsseite des Repos direkt an.
 
 ## YouTube-Login / Premium
 
