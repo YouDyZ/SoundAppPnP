@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- YouTube-Embeds spielen nur ab, wenn die Seite einen HTTP-Referer sendet
+     (sonst: "Fehler bei der Konfiguration des Videoplayers", Fehler 153).
+     https://support.google.com/youtube/answer/171780 -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>PnP Soundboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%9A%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <button id="sidebar-toggle" class="sidebar-toggle" aria-expanded="false" aria-controls="sidebar" title="Sammlungen anzeigen">☰ Sammlungen</button>
+
+  <aside id="sidebar" class="sidebar">
+    <h1 class="app-title">🎚 PnP Soundboard</h1>
+
+    <div class="sidebar-section">
+      <h2>Sammlungen</h2>
+      <ul id="collections-list" class="collections-list"></ul>
+      <button id="save-btn" class="btn btn-block" hidden>💾 Änderungen speichern</button>
+      <button id="save-as-btn" class="btn btn-block">Speichern unter…</button>
+    </div>
+
+    <div class="sidebar-section login-section">
+      <h2>YouTube-Konto</h2>
+      <p class="hint">
+        Premium-Vorteile (werbefrei etc.) greifen automatisch, wenn du in diesem Browser bereits bei
+        YouTube eingeloggt bist — ein separater Login in dieser App ist technisch nicht möglich/nötig.
+      </p>
+      <a id="youtube-login-link" class="btn btn-block" href="https://www.youtube.com" target="_blank" rel="noopener">
+        Bei YouTube anmelden ↗
+      </a>
+    </div>
+  </aside>
+
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+  <main class="main">
+    <div id="env-warning" class="env-warning" role="alert" hidden></div>
+
+    <header class="topbar">
+      <div class="topbar-row">
+        <button id="play-all-btn" class="btn btn-primary">▶ Alle abspielen</button>
+        <button id="stop-all-btn" class="btn">⏹ Alle stoppen</button>
+        <button id="copy-share-btn" class="btn">🔗 Link teilen</button>
+      </div>
+    </header>
+
+    <section class="add-layer">
+      <div class="add-layer-row">
+        <input id="add-url-input" type="text" placeholder="YouTube- oder YouTube-Music-Link einfügen…" autocomplete="off" spellcheck="false">
+        <button id="add-url-btn" class="btn btn-primary" title="Ebene hinzufügen">+</button>
+      </div>
+      <p id="add-url-error" class="field-error" hidden></p>
+    </section>
+
+    <section id="layers-list" class="layers-list" aria-live="polite"></section>
+
+    <p id="empty-hint" class="empty-hint">
+      Noch keine Ebenen. Füge oben einen YouTube- oder YouTube-Music-Link ein (z. B. Ambience, Musik, Soundeffekte)
+      — er wird automatisch als neue Ebene hinzugefügt.
+    </p>
+  </main>
+</div>
+
+<div id="modal-root" class="modal-root"></div>
+<div id="toast-root" class="toast-root" aria-live="assertive"></div>
+
+<script src="js/url-parser.js"></script>
+<script src="js/layer.js"></script>
+<script src="js/youtube-api.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/collections.js"></script>
+<script src="js/share.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
