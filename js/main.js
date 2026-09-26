@@ -1,29 +1,29 @@
 (function () {
   const {
-    initYouTubeApi,
+    initAll: initPlayers,
     createPlayer,
     destroyPlayer,
     playLayer,
     stopLayer,
+    playOnce,
     setLayerVolume,
     setLayerQueue,
     nextVideo,
     previousVideo,
     setLayerLoop,
     setLayerShuffle,
-    getPlaylistPosition,
+    fetchTitle,
+    fetchPlaylistPosition,
     getCurrentTime,
-    getEmbedContext,
-    describePlayerError,
-  } = window.SB.youtubeApi;
-  const { parseYouTubeUrl, PARSE_ERROR_MESSAGES } = window.SB.urlParser;
+  } = window.SB.players;
+  const { describePlayerError, getEmbedContext } = window.SB.youtubeApi;
+  const { parseSourceUrl, PARSE_ERROR_MESSAGES } = window.SB.urlParser;
   const {
     createLayer,
     normalizeLayer,
     buildLayerElement,
     isPlaylist,
-    isYouTubePlaylist,
-    primaryVideoId,
+    isLinkedPlaylist,
     layerWatchUrl,
     renderQueue,
     setQueueError,
@@ -51,9 +51,23 @@
     stripShareParamFromUrl,
   } = window.SB.share;
   const { showModal, confirmModal, promptModal } = window.SB.modal;
+  const { formatTime, parseTimeInput } = window.SB.util;
+  const {
+    normalizeAction,
+    createAction,
+    actionSourceUrl,
+    buildActionElement,
+    setActionEditing,
+    setActionPlaying,
+    setActionError,
+    updateActionLabel,
+    updateActionRange,
+    readRange,
+  } = window.SB.actionButtons;
 
   const state = {
     layers: [],
+    actions: [],
     activeCollectionId: null,
   };
   let isDirty = false;
@@ -61,6 +75,7 @@
 
   const layerRefs = new Map(); // id -> { root, refs } from buildLayerElement
   const videoTitles = new Map(); // videoId -> title, for the per-layer queue list
+  const actionRefs = new Map(); // action id -> { root, refs } from buildActionElement
 
   const els = {
     layersList: document.getElementById('layers-list'),
@@ -79,6 +94,11 @@
     sidebarBackdrop: document.getElementById('sidebar-backdrop'),
     toastRoot: document.getElementById('toast-root'),
     envWarning: document.getElementById('env-warning'),
+    actionsList: document.getElementById('actions-list'),
+    actionsEmpty: document.getElementById('actions-empty'),
+    addActionInput: document.getElementById('add-action-input'),
+    addActionBtn: document.getElementById('add-action-btn'),
+    addActionError: document.getElementById('add-action-error'),
     app: document.getElementById('app'),
   };
 
@@ -96,7 +116,11 @@
   }
 
   function getWorkingStateSnapshot() {
-    return { activeCollectionId: state.activeCollectionId, layers: state.layers };
+    return {
+      activeCollectionId: state.activeCollectionId,
+      layers: state.layers,
+      actions: state.actions,
+    };
   }
 
   function layerLookup(id) {
@@ -192,7 +216,13 @@
       const entry = layerRefs.get(id);
       if (!layer || !entry) return;
 
-      const parsed = parseYouTubeUrl(rawUrl);
+      // A per-layer queue is a YouTube construct (playerVars.playlist), so
+      // only YouTube videos can be appended here.
+      const parsed = parseSourceUrl(rawUrl);
+      if (parsed.ok && parsed.provider === 'soundcloud') {
+        setQueueError(entry.refs, 'SoundCloud lässt sich hier nicht anhängen — lege dafür eine eigene Ebene an.');
+        return;
+      }
       if (!parsed.ok) {
         setQueueError(entry.refs, PARSE_ERROR_MESSAGES[parsed.reason] || 'Link konnte nicht gelesen werden.');
         return;
@@ -270,13 +300,6 @@
       .catch(() => '');
   }
 
-  function formatTime(totalSeconds) {
-    const s = Math.max(0, Math.round(totalSeconds || 0));
-    const m = Math.floor(s / 60);
-    const rem = s % 60;
-    return `${m}:${String(rem).padStart(2, '0')}`;
-  }
-
   function mountLayer(layer) {
     const { root, refs } = buildLayerElement(layer, layerActions);
     els.layersList.appendChild(root);
@@ -290,10 +313,12 @@
 
     createPlayer(
       layer.id,
+      layer.provider,
       refs.playerContainer,
       {
         videoIds: layer.videoIds,
         playlistId: layer.playlistId,
+        sourceUrl: layer.sourceUrl,
         startSeconds: layer.startSeconds,
         volume: layer.volume,
         loop: layer.loop,
@@ -306,13 +331,17 @@
           updateTrackLabel(layer.id, refs);
         },
         onStateChange: (event) => {
-          const isPlaying = event.data === 1; // YT.PlayerState.PLAYING
+          // YouTube reports numeric states, SoundCloud a plain flag.
+          const isPlaying = typeof event.playing === 'boolean' ? event.playing : event.data === 1;
           setPlayingUI(refs, isPlaying);
           // The playlist moves on by itself, so refresh which entry is loaded.
           updateTrackLabel(layer.id, refs);
         },
         onError: (event) => {
-          setLayerError(refs, describePlayerError(event.data), layerWatchUrl(layer));
+          const message = event.data === 'soundcloud'
+            ? 'SoundCloud konnte diesen Track nicht laden — ist er noch öffentlich?'
+            : describePlayerError(event.data);
+          setLayerError(refs, message, layerWatchUrl(layer));
         },
         onStalled: (context) => {
           // The player never reported readiness. When the page has no usable
@@ -339,42 +368,47 @@
   function updateTrackLabel(id, refs) {
     const layer = layerLookup(id);
     if (!layer || !isPlaylist(layer)) return;
-    const position = getPlaylistPosition(id);
-    if (!position) {
-      setTrackLabel(refs, '');
-      return;
-    }
-    const counter = position.total > 0 ? `${position.index + 1}/${position.total}` : '–';
-    setTrackLabel(refs, position.title ? `${counter} · ${position.title}` : counter);
+    // SoundCloud answers through callbacks, YouTube synchronously — the
+    // players façade normalises both into a promise.
+    fetchPlaylistPosition(id).then((position) => {
+      if (!position) {
+        setTrackLabel(refs, '');
+        return;
+      }
+      const counter = position.total > 0 ? `${position.index + 1}/${position.total}` : '–';
+      setTrackLabel(refs, position.title ? `${counter} · ${position.title}` : counter);
+    });
   }
 
   function maybeFetchTitle(id, player, refs) {
     const layer = layerLookup(id);
     if (!layer || layer.titleIsCustom) return;
 
-    // For a playlist layer the player only knows the current video's title —
-    // the layer wants the playlist's own name, which oEmbed provides.
-    if (!isPlaylist(layer)) {
-      let title = '';
-      try {
-        title = player.getVideoData?.().title || '';
-      } catch {
-        title = '';
-      }
+    // For a linked playlist the player only knows the current track's title —
+    // the layer wants the list's own name, which oEmbed provides.
+    const askPlayerFirst = !isLinkedPlaylist(layer);
+    const fromPlayer = askPlayerFirst ? fetchTitle(id, player) : Promise.resolve('');
 
+    fromPlayer.then((title) => {
       if (title) {
         applyFetchedTitle(id, title, refs);
         return;
       }
-    }
+      fetchOEmbedTitle(layerWatchUrl(layer), layer.provider).then((fetched) => {
+        if (fetched) applyFetchedTitle(id, fetched, refs);
+      });
+    });
+  }
 
-    const watchUrl = layerWatchUrl(layer);
-    fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`)
+  /** oEmbed endpoints of both providers, used where the player has no title. */
+  function fetchOEmbedTitle(sourceUrl, provider) {
+    const endpoint = provider === 'soundcloud'
+      ? `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(sourceUrl)}`
+      : `https://www.youtube.com/oembed?url=${encodeURIComponent(sourceUrl)}&format=json`;
+    return fetch(endpoint)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.title) applyFetchedTitle(id, data.title, refs);
-      })
-      .catch(() => { /* ignore, keep fallback title */ });
+      .then((data) => data?.title || '')
+      .catch(() => '');
   }
 
   function applyFetchedTitle(id, title, refs) {
@@ -387,10 +421,13 @@
   }
 
   function addLayerFromParsed(parsed, sourceUrl) {
+    const isSoundCloudSource = parsed.provider === 'soundcloud';
     const layer = createLayer({
+      provider: parsed.provider || 'youtube',
       videoIds: parsed.videoId ? [parsed.videoId] : [],
-      playlistId: parsed.kind === 'playlist' ? parsed.playlistId : '',
-      sourceUrl,
+      playlistId: !isSoundCloudSource && parsed.kind === 'playlist' ? parsed.playlistId : '',
+      isSet: isSoundCloudSource && parsed.kind === 'playlist',
+      sourceUrl: isSoundCloudSource ? parsed.sourceUrl : sourceUrl,
       startSeconds: parsed.kind === 'playlist' ? 0 : parsed.startSeconds,
     });
     state.layers.push(layer);
@@ -408,6 +445,221 @@
     layerRefs.clear();
     state.layers.forEach(mountLayer);
     updateEmptyHint();
+  }
+
+
+  /* ---------------- Action buttons (one-shot sounds) ---------------- */
+
+  function actionLookup(id) {
+    return state.actions.find((a) => a.id === id);
+  }
+
+  const actionHandlers = {
+    /** One press = the sound plays exactly once, from start to end point. */
+    onTrigger(id) {
+      const action = actionLookup(id);
+      if (!action) return;
+      playOnce(id, {
+        videoId: action.videoId,
+        startSeconds: action.startSeconds,
+        endSeconds: action.endSeconds,
+        volume: action.volume,
+      });
+    },
+    onEditToggle(id) {
+      const entry = actionRefs.get(id);
+      if (!entry) return;
+      setActionEditing(entry.refs, entry.refs.panel.hidden);
+    },
+    onLabelChange(id, label) {
+      const action = actionLookup(id);
+      const entry = actionRefs.get(id);
+      if (!action || !entry) return;
+      const trimmed = label.trim();
+      if (!trimmed) {
+        updateActionLabel(entry.refs, action.label);
+        return;
+      }
+      action.label = trimmed;
+      action.labelIsCustom = true;
+      updateActionLabel(entry.refs, trimmed);
+      markDirty();
+    },
+    onVolumeChange(id, volume) {
+      const action = actionLookup(id);
+      if (!action) return;
+      action.volume = volume;
+      markDirty();
+    },
+    onRangeChange(id, raw) {
+      const action = actionLookup(id);
+      const entry = actionRefs.get(id);
+      if (!action || !entry) return;
+      const { startSeconds, endSeconds } = readRange(raw, action);
+      action.startSeconds = startSeconds;
+      action.endSeconds = endSeconds;
+      updateActionRange(entry.refs, action);
+      setActionError(
+        entry.refs,
+        String(raw.end || '').trim() && endSeconds == null
+          ? 'Der Endpunkt muss hinter dem Startpunkt liegen — er wurde verworfen.'
+          : ''
+      );
+      markDirty();
+    },
+    /** Takes the preview player's position, so a cut can be set by ear. */
+    onUseCurrentTime(id, field) {
+      const action = actionLookup(id);
+      const entry = actionRefs.get(id);
+      if (!action || !entry) return;
+      const now = Math.max(0, Math.round(getCurrentTime(id) || 0));
+      if (field === 'start') {
+        action.startSeconds = now;
+        if (action.endSeconds != null && action.endSeconds <= now) action.endSeconds = null;
+      } else if (now > action.startSeconds) {
+        action.endSeconds = now;
+      } else {
+        setActionError(entry.refs, 'Der Endpunkt muss hinter dem Startpunkt liegen.');
+        return;
+      }
+      setActionError(entry.refs, '');
+      updateActionRange(entry.refs, action);
+      markDirty();
+      showToast(`${field === 'start' ? 'Startpunkt' : 'Endpunkt'} gesetzt: ${formatTime(now)}`);
+    },
+    onRemove(id) {
+      unmountAction(id);
+      state.actions = state.actions.filter((a) => a.id !== id);
+      updateActionsEmptyHint();
+      markDirty();
+    },
+  };
+
+  function mountAction(action) {
+    const { root, refs } = buildActionElement(action, actionHandlers);
+    els.actionsList.appendChild(root);
+    actionRefs.set(action.id, { root, refs });
+
+    createPlayer(
+      action.id,
+      action.provider,
+      refs.playerContainer,
+      {
+        videoIds: action.videoId ? [action.videoId] : [],
+        sourceUrl: action.sourceUrl,
+        startSeconds: action.startSeconds,
+        volume: action.volume,
+      },
+      {
+        onReady: (event) => {
+          setActionError(refs, '');
+          maybeFetchActionLabel(action.id, event.target, refs);
+        },
+        onStateChange: (event) => {
+          const isPlaying = typeof event.playing === 'boolean' ? event.playing : event.data === 1;
+          setActionPlaying(refs, isPlaying);
+        },
+        onError: (event) => {
+          setActionError(
+            refs,
+            event.data === 'soundcloud'
+              ? 'SoundCloud konnte diesen Sound nicht laden.'
+              : describePlayerError(event.data)
+          );
+        },
+      }
+    );
+  }
+
+  function unmountAction(id) {
+    destroyPlayer(id);
+    actionRefs.get(id)?.root.remove();
+    actionRefs.delete(id);
+  }
+
+  function maybeFetchActionLabel(id, player, refs) {
+    const action = actionLookup(id);
+    if (!action || action.labelIsCustom) return;
+    fetchTitle(id, player).then((title) => {
+      if (title) return applyActionLabel(id, title, refs);
+      return fetchOEmbedTitle(actionSourceUrl(action), action.provider)
+        .then((fetched) => { if (fetched) applyActionLabel(id, fetched, refs); });
+    });
+  }
+
+  function applyActionLabel(id, label, refs) {
+    const action = actionLookup(id);
+    if (!action || action.labelIsCustom) return;
+    action.label = label;
+    updateActionLabel(refs, label);
+    markDirty();
+  }
+
+  function renderAllActions() {
+    Array.from(actionRefs.keys()).forEach(unmountAction);
+    els.actionsList.textContent = '';
+    actionRefs.clear();
+    state.actions.forEach(mountAction);
+    updateActionsEmptyHint();
+  }
+
+  function updateActionsEmptyHint() {
+    els.actionsEmpty.hidden = state.actions.length > 0;
+  }
+
+  function hideAddActionError() {
+    els.addActionError.hidden = true;
+    els.addActionError.textContent = '';
+  }
+
+  function tryAddActionFromInput({ silent }) {
+    const value = els.addActionInput.value;
+    const parsed = parseSourceUrl(value);
+    if (!parsed.ok) {
+      if (!silent) {
+        const msg = PARSE_ERROR_MESSAGES[parsed.reason];
+        if (msg) {
+          els.addActionError.textContent = msg;
+          els.addActionError.hidden = false;
+        } else {
+          hideAddActionError();
+        }
+      }
+      return false;
+    }
+    if (parsed.kind === 'playlist') {
+      els.addActionError.textContent = 'Ein Action-Button spielt einen einzelnen Sound — bitte keinen Playlist-Link.';
+      els.addActionError.hidden = false;
+      return false;
+    }
+
+    const action = createAction({
+      provider: parsed.provider || 'youtube',
+      videoId: parsed.videoId || '',
+      sourceUrl: parsed.provider === 'soundcloud' ? parsed.sourceUrl : value.trim(),
+      startSeconds: parsed.startSeconds || 0,
+    });
+    state.actions.push(action);
+    mountAction(action);
+    updateActionsEmptyHint();
+    markDirty();
+    els.addActionInput.value = '';
+    hideAddActionError();
+    return true;
+  }
+
+  let addActionDebounce = null;
+
+  function wireActionControls() {
+    els.addActionInput.addEventListener('input', () => {
+      hideAddActionError();
+      clearTimeout(addActionDebounce);
+      addActionDebounce = setTimeout(() => tryAddActionFromInput({ silent: true }), 200);
+    });
+    els.addActionBtn.addEventListener('click', () => tryAddActionFromInput({ silent: false }));
+    els.addActionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') tryAddActionFromInput({ silent: false });
+    });
   }
 
   /* ---------------- Add-layer input wiring ---------------- */
@@ -429,7 +681,7 @@
 
   function tryAddFromInput({ silent }) {
     const value = els.addInput.value;
-    const parsed = parseYouTubeUrl(value);
+    const parsed = parseSourceUrl(value);
     if (parsed.ok) {
       addLayerFromParsed(parsed, value.trim());
       els.addInput.value = '';
@@ -457,7 +709,7 @@
         hideAddError();
         return;
       }
-      const parsed = parseYouTubeUrl(els.addInput.value);
+      const parsed = parseSourceUrl(els.addInput.value);
       if (!parsed.ok) showAddError(parsed.reason);
     });
 
@@ -484,11 +736,11 @@
     });
 
     els.copyShareBtn.addEventListener('click', async () => {
-      if (state.layers.length === 0) {
-        showToast('Keine Ebenen zum Teilen vorhanden.');
+      if (state.layers.length === 0 && state.actions.length === 0) {
+        showToast('Nichts zum Teilen vorhanden.');
         return;
       }
-      const url = buildShareUrl(state.layers);
+      const url = buildShareUrl(state.layers, state.actions);
       try {
         await navigator.clipboard.writeText(url);
         showToast('Link kopiert!');
@@ -515,7 +767,9 @@
 
   function handleSave() {
     if (!state.activeCollectionId) return;
-    collectionsStore = updateCollectionLayers(collectionsStore, state.activeCollectionId, state.layers);
+    collectionsStore = updateCollectionLayers(
+      collectionsStore, state.activeCollectionId, state.layers, state.actions
+    );
     saveCollectionsStore(collectionsStore);
     isDirty = false;
     showToast('Änderungen gespeichert.');
@@ -532,15 +786,18 @@
     }
     const collection = collectionsStore.collections[id];
     if (!collection) return;
-    loadLayersIntoWorkingArea(collection.layers, id);
+    loadLayersIntoWorkingArea(collection.layers, id, collection.actions);
   }
 
-  function loadLayersIntoWorkingArea(rawLayers, collectionId) {
+  function loadLayersIntoWorkingArea(rawLayers, collectionId, rawActions = []) {
     state.layers.forEach((l) => destroyPlayer(l.id));
+    state.actions.forEach((a) => destroyPlayer(a.id));
     state.layers = rawLayers.map(normalizeLayer);
+    state.actions = (rawActions || []).map(normalizeAction);
     state.activeCollectionId = collectionId ?? null;
     isDirty = false;
     renderAllLayers();
+    renderAllActions();
     renderSidebar();
     flushAutosave(getWorkingStateSnapshot);
   }
@@ -565,10 +822,10 @@
     });
     if (!name) return;
 
-    const { store, id } = createCollection(collectionsStore, name, []);
+    const { store, id } = createCollection(collectionsStore, name, [], []);
     collectionsStore = store;
     saveCollectionsStore(collectionsStore);
-    loadLayersIntoWorkingArea([], id);
+    loadLayersIntoWorkingArea([], id, []);
     showToast(`Sammlung "${name}" angelegt.`);
   }
 
@@ -579,12 +836,15 @@
       confirmLabel: 'Speichern',
     });
     if (!name) return;
-    const { store, id } = createCollection(collectionsStore, name, state.layers);
+    const { store, id } = createCollection(collectionsStore, name, state.layers, state.actions);
     collectionsStore = store;
     saveCollectionsStore(collectionsStore);
     state.activeCollectionId = id;
     isDirty = false;
-    markDirty();
+    // Persist the new active collection without marking the state dirty again —
+    // right after "Speichern unter…" nothing is unsaved, so the app must not
+    // warn about lost changes on the next collection switch.
+    flushAutosave(getWorkingStateSnapshot);
     renderSidebar();
     showToast(`Sammlung "${name}" gespeichert.`);
   }
@@ -636,10 +896,12 @@
 
   /* ---------------- Share import ---------------- */
 
-  function showShareImportModal(count) {
+  function showShareImportModal(layerCount, actionCount) {
+    const parts = [`${layerCount} Ebene(n)`];
+    if (actionCount > 0) parts.push(`${actionCount} Action-Button(s)`);
     return showModal({
       title: 'Geteilte Sammlung öffnen',
-      message: `Dieser Link enthält ${count} Ebene(n). Wie möchtest du fortfahren?`,
+      message: `Dieser Link enthält ${parts.join(' und ')}. Wie möchtest du fortfahren?`,
       buttons: [
         { label: 'Abbrechen', value: 'cancel' },
         { label: 'In aktuelle Arbeitsfläche laden', value: 'current' },
@@ -660,26 +922,27 @@
       return false;
     }
 
-    const choice = await showShareImportModal(decoded.layers.length);
+    const choice = await showShareImportModal(decoded.layers.length, (decoded.actions || []).length);
     let loaded = false;
 
     if (choice === 'new') {
       const layers = decoded.layers.map(normalizeLayer);
+      const actions = (decoded.actions || []).map(normalizeAction);
       const name = await promptModal('Name für die neue Sammlung:', {
         title: 'Als neue Sammlung speichern',
         defaultValue: 'Geteilte Sammlung',
         confirmLabel: 'Speichern & laden',
       });
       if (name) {
-        const { store, id } = createCollection(collectionsStore, name, layers);
+        const { store, id } = createCollection(collectionsStore, name, layers, actions);
         collectionsStore = store;
         saveCollectionsStore(collectionsStore);
-        loadLayersIntoWorkingArea(layers, id);
+        loadLayersIntoWorkingArea(layers, id, actions);
         loaded = true;
         showToast(`Sammlung "${name}" geladen.`);
       }
     } else if (choice === 'current') {
-      loadLayersIntoWorkingArea(decoded.layers, null);
+      loadLayersIntoWorkingArea(decoded.layers, null, decoded.actions || []);
       loaded = true;
       showToast('Geteilte Ebenen geladen.');
     }
@@ -738,20 +1001,25 @@
 
   async function boot() {
     renderEnvWarning();
-    initYouTubeApi();
+    initPlayers();
 
     collectionsStore = loadCollectionsStore();
     const working = loadWorkingState();
     state.layers = (working?.layers || []).map(normalizeLayer);
+    state.actions = (working?.actions || []).map(normalizeAction);
     state.activeCollectionId = working?.activeCollectionId ?? null;
 
     wireAddLayerControls();
+    wireActionControls();
     wireGlobalControls();
     wireSidebar();
 
     const importedFromShareLink = await handleShareImportIfPresent();
 
-    if (!importedFromShareLink) renderAllLayers();
+    if (!importedFromShareLink) {
+      renderAllLayers();
+      renderAllActions();
+    }
     renderSidebar();
 
     window.addEventListener('beforeunload', () => flushAutosave(getWorkingStateSnapshot));

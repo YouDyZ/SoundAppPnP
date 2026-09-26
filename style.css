@@ -681,3 +681,149 @@ button, input, select {
 }
 
 .layer-queue-error { margin-top: 0.4rem; }
+
+/* ---------------- Action-Buttons (One-Shot-Sounds) ---------------- */
+
+.action-board {
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 0 0 0.75rem;
+}
+
+.section-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: normal;
+}
+
+.actions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.actions-list:empty { margin-bottom: 0; }
+
+.actions-empty {
+  margin: 0 0 0.75rem;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.action-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  overflow: hidden;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.action-trigger-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.action-btn {
+  flex: 1;
+  min-width: 6rem;
+  max-width: 16rem;
+  padding: 0.7rem 1rem;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-btn:hover { background: var(--bg-card-hover); }
+.action-btn:active { transform: translateY(1px); }
+
+.action-btn.is-firing {
+  background: var(--type-sfx);
+  color: #fff;
+}
+
+.action-edit-btn {
+  padding: 0 0.6rem;
+  border-left: 1px solid var(--border);
+}
+
+.action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  min-width: 20rem;
+}
+
+.action-panel[hidden] { display: none; }
+
+.action-label-input,
+.action-time-input {
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.action-time-input {
+  width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.action-label-input:focus,
+.action-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.action-volume-row,
+.action-time-row,
+.action-foot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.action-foot-row { justify-content: space-between; }
+.action-volume-row .action-volume { flex: 1; min-width: 6rem; }
+.action-volume-value { font-variant-numeric: tabular-nums; }
+.action-source-link { color: var(--accent); }
+
+/* The one-shot player is only needed to hear the cut while editing. */
+.action-player-host {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 22rem;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.action-player-host iframe { width: 100%; height: 100%; border: 0; }
+
+.sc-widget { width: 100%; height: 100%; border: 0; }

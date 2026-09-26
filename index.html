@@ -53,9 +53,22 @@
       </div>
     </header>
 
+    <section class="action-board">
+      <h2 class="section-title">Action-Buttons <span class="section-hint">— Sounds, die beim Drücken einmal abgespielt werden</span></h2>
+      <div id="actions-list" class="actions-list"></div>
+      <p id="actions-empty" class="empty-hint actions-empty">
+        Noch keine Action-Buttons. Füge unten einen YouTube- oder SoundCloud-Link ein (z. B. Türknarren, Schwerthieb).
+      </p>
+      <div class="add-layer-row">
+        <input id="add-action-input" type="text" placeholder="Link für einen Action-Button (einmaliger Sound)…" autocomplete="off" spellcheck="false">
+        <button id="add-action-btn" class="btn btn-primary" title="Action-Button hinzufügen">+</button>
+      </div>
+      <p id="add-action-error" class="field-error" hidden></p>
+    </section>
+
     <section class="add-layer">
       <div class="add-layer-row">
-        <input id="add-url-input" type="text" placeholder="YouTube- oder YouTube-Music-Link einfügen…" autocomplete="off" spellcheck="false">
+        <input id="add-url-input" type="text" placeholder="YouTube-, YouTube-Music- oder SoundCloud-Link einfügen…" autocomplete="off" spellcheck="false">
         <button id="add-url-btn" class="btn btn-primary" title="Ebene hinzufügen">+</button>
       </div>
       <p id="add-url-error" class="field-error" hidden></p>
@@ -64,8 +77,8 @@
     <section id="layers-list" class="layers-list" aria-live="polite"></section>
 
     <p id="empty-hint" class="empty-hint">
-      Noch keine Ebenen. Füge oben einen YouTube- oder YouTube-Music-Link ein (z. B. Ambience, Musik, Soundeffekte)
-      — er wird automatisch als neue Ebene hinzugefügt.
+      Noch keine Ebenen. Füge oben einen YouTube-, YouTube-Music- oder SoundCloud-Link ein
+      (z. B. Ambience, Musik, Soundeffekte) — er wird automatisch als neue Ebene hinzugefügt.
     </p>
   </main>
 </div>
@@ -73,9 +86,13 @@
 <div id="modal-root" class="modal-root"></div>
 <div id="toast-root" class="toast-root" aria-live="assertive"></div>
 
+<script src="js/util.js"></script>
 <script src="js/url-parser.js"></script>
 <script src="js/layer.js"></script>
+<script src="js/action-buttons.js"></script>
 <script src="js/youtube-api.js"></script>
+<script src="js/soundcloud-api.js"></script>
+<script src="js/players.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/collections.js"></script>
 <script src="js/share.js"></script>

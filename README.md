@@ -1,8 +1,9 @@
 # PnP Soundboard
 
-Ein browserbasiertes Soundboard, um für Pen&Paper-Runden mehrere YouTube- bzw.
-YouTube-Music-Links als unabhängige Audio-Ebenen (Ambience, Musik, Soundeffekte, …)
-gleichzeitig abzuspielen und live zu mischen.
+Ein browserbasiertes Soundboard, um für Pen&Paper-Runden mehrere YouTube-,
+YouTube-Music- und SoundCloud-Links als unabhängige Audio-Ebenen (Ambience,
+Musik, Soundeffekte, …) gleichzeitig abzuspielen und live zu mischen — dazu
+Action-Buttons für Sounds, die auf Knopfdruck genau einmal laufen.
 
 Rein statisch: nur HTML/CSS/JS, Speicherung ausschließlich über `localStorage` im
 Browser. Kein Build-Schritt, kein Backend — nur ein simpler statischer
@@ -53,10 +54,20 @@ müsste oder könnte. Der "Bei YouTube anmelden"-Button in der Seitenleiste
 
 ## Bedienung
 
-- **Ebene hinzufügen**: YouTube- oder YouTube-Music-Link in das Eingabefeld
-  einfügen — wird automatisch als neue Ebene übernommen (kein Klick auf „+“
-  nötig), alternativ „+“ klicken. Unterstützt `watch?v=`, `youtu.be/`,
-  `music.youtube.com`, `/shorts/`, `/embed/`, `/live/` sowie reine Video-IDs.
+- **Ebene hinzufügen**: Link in das Eingabefeld einfügen — wird automatisch als
+  neue Ebene übernommen (kein Klick auf „+“ nötig), alternativ „+“ klicken.
+  - *YouTube*: `watch?v=`, `youtu.be/`, `music.youtube.com`, `/shorts/`,
+    `/embed/`, `/live/` sowie reine Video-IDs.
+  - *SoundCloud*: Track-Links (`soundcloud.com/künstler/track`), Sets
+    (`/sets/…`) und Kurzlinks (`on.soundcloud.com/…`). Läuft über das
+    SoundCloud-Widget, also ohne API-Schlüssel und ohne Login.
+- **Action-Buttons** (Block über der Ebenenliste): Sounds, die auf Knopfdruck
+  **genau einmal** abgespielt werden — Türknarren, Schwerthieb, Donner. Link
+  einfügen, Button drücken, fertig. Über ✎ lassen sich Beschriftung,
+  Lautstärke und ein Ausschnitt (von/bis) einstellen; „Start ⟵ jetzt“ und
+  „Ende ⟵ jetzt“ übernehmen die Position aus dem Vorschau-Player, sodass sich
+  ein Effekt nach Gehör aus einem längeren Video schneiden lässt. Ohne
+  Endpunkt läuft der Sound bis zum Ende des Videos.
 - **Playlists**: zwei Wege, beide pro Ebene.
   1. *Fertige YouTube-Playlist verlinken* — `playlist?list=…` einfügen (oder
      einen `watch?v=…&list=…`-Link, dann startet die Ebene bei diesem Video).
@@ -67,9 +78,14 @@ müsste oder könnte. Der "Bei YouTube anmelden"-Button in der Seitenleiste
      hinzufügen, sortieren (▲▼) oder entfernen (✕). Ab zwei Videos wird die
      Ebene zur Playlist („☰ Playlist (n)“).
 
+  Bei SoundCloud übernimmt ein **Set** die Rolle der verlinkten Playlist; eine
+  eigene Liste lässt sich dort nicht bauen (das Widget kennt keine
+  zusammengestellten Warteschlangen).
+
   In beiden Fällen gibt es pro Ebene ⏮/⏭ zum Springen sowie die Schalter
-  🔁 **Endlos** (Playlist wiederholen) und 🔀 **Zufall**. Beides wird
-  mitgespeichert und mitgeteilt.
+  🔁 **Endlos** und 🔀 **Zufall**. Beides wird mitgespeichert und mitgeteilt.
+  Zufall bietet nur YouTube an — das SoundCloud-Widget kann es nicht, deshalb
+  ist der Schalter dort ausgeblendet statt wirkungslos sichtbar.
 - **Lautstärke**: Regler pro Ebene.
 - **Start/Stop**: pro Ebene individuell, oder „Alle abspielen“ / „Alle stoppen“
   oben für alle Ebenen gleichzeitig.
@@ -80,10 +96,12 @@ müsste oder könnte. Der "Bei YouTube anmelden"-Button in der Seitenleiste
   Sammlung unter einem Namen an und räumt die Arbeitsfläche frei;
   „Speichern unter…“ sichert die aktuellen Ebenen als neue Sammlung.
   Sammlungen lassen sich laden, umbenennen und löschen — alles im
-  `localStorage` des Browsers. Bei ungespeicherten Änderungen wird vor dem
+  `localStorage` des Browsers. Eine Sammlung enthält immer beides: die Ebenen
+  **und** die Action-Buttons. Bei ungespeicherten Änderungen wird vor dem
   Wechseln nachgefragt.
-- **Link teilen**: erzeugt einen Link mit allen aktuellen Ebenen (Name, Video,
-  Lautstärke, Startpunkt, Typ) zum Weitergeben. Beim Öffnen eines solchen Links
+- **Link teilen**: erzeugt einen Link mit allen aktuellen Ebenen und
+  Action-Buttons (Name, Quelle, Lautstärke, Start-/Endpunkt, Typ, Endlos/Zufall)
+  zum Weitergeben. Beim Öffnen eines solchen Links
   fragt die App nach, ob als neue Sammlung gespeichert oder in die aktuelle
   Arbeitsfläche geladen werden soll — nichts wird automatisch überschrieben.
 
@@ -111,6 +129,13 @@ Meldet sich ein Player acht Sekunden lang gar nicht, zeigt die betroffene Ebene
 denselben Hinweis an — YouTube malt Fehler 153 nämlich nur in den iframe und
 meldet ihn nicht über die JS-API.
 
+### SoundCloud
+
+SoundCloud läuft über das offizielle Widget (`w.soundcloud.com/player`), das die
+Track-URL serverseitig auflöst — kein API-Schlüssel, kein Login. Was dort nicht
+abspielt, ist in aller Regel nicht öffentlich oder vom Rechteinhaber für
+externe Einbettung gesperrt; die Ebene zeigt das dann an.
+
 ### Weitere Player-Fehler
 
 Jede Ebene zeigt den konkreten Grund statt einer Sammelmeldung an: ungültige
@@ -127,6 +152,11 @@ Link, um das Video direkt auf YouTube zu öffnen.
   das dann pro Ebene an, statt stillschweigend nichts abzuspielen.
 - Ohne HTTP-Server (also über `file://`) ist keine Wiedergabe möglich, siehe
   Fehlerbehebung.
+- Für Action-Buttons gibt es einen Ausschnitt (von/bis), für Ebenen weiterhin
+  nur einen Startpunkt.
+- Bei SoundCloud stoppt ein Action-Button mit Endpunkt über einen Timer, weil
+  das Widget keinen Endpunkt kennt — das ist minimal ungenauer als bei YouTube,
+  wo der Player den Endpunkt selbst einhält.
 - Loop-Bereiche und mehrere Cue-Punkte pro Ebene sind vorbereitet, aber noch
   nicht umgesetzt (nur ein einzelner Startpunkt pro Ebene in dieser Version).
   Bei Playlist-Ebenen entfällt der Startpunkt ganz, weil er sich immer nur auf

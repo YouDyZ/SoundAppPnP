@@ -21,6 +21,7 @@
         schemaVersion: SCHEMA_VERSION,
         activeCollectionId: state.activeCollectionId ?? null,
         layers: state.layers,
+        actions: state.actions || [],
         updatedAt: new Date().toISOString(),
       };
       localStorage.setItem(WORKING_KEY, JSON.stringify(payload));

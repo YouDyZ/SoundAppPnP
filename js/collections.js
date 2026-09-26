@@ -36,7 +36,7 @@
     }
   }
 
-  function createCollection(store, name, layers) {
+  function createCollection(store, name, layers, actions = []) {
     const id = uuid();
     const now = new Date().toISOString();
     const next = {
@@ -44,20 +44,20 @@
       collectionOrder: [...store.collectionOrder, id],
       collections: {
         ...store.collections,
-        [id]: { id, name, layers, createdAt: now, updatedAt: now },
+        [id]: { id, name, layers, actions, createdAt: now, updatedAt: now },
       },
     };
     return { store: next, id };
   }
 
-  function updateCollectionLayers(store, id, layers) {
+  function updateCollectionLayers(store, id, layers, actions = []) {
     const existing = store.collections[id];
     if (!existing) return store;
     return {
       ...store,
       collections: {
         ...store.collections,
-        [id]: { ...existing, layers, updatedAt: new Date().toISOString() },
+        [id]: { ...existing, layers, actions, updatedAt: new Date().toISOString() },
       },
     };
   }

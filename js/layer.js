@@ -42,6 +42,7 @@
     const now = new Date().toISOString();
     return {
       id: raw.id || uuid(),
+      provider: raw.provider === 'soundcloud' ? 'soundcloud' : 'youtube',
       videoIds: normalizeVideoIds(raw),
       playlistId: raw.playlistId || '',
       sourceUrl: raw.sourceUrl || '',
@@ -50,6 +51,7 @@
       type: TYPE_VALUES.has(raw.type) ? raw.type : 'other',
       volume: clamp(Number.isFinite(raw.volume) ? raw.volume : 80, 0, 100),
       startSeconds: Number.isFinite(raw.startSeconds) ? Math.max(0, raw.startSeconds) : 0,
+      isSet: !!raw.isSet,
       loop: !!raw.loop,
       shuffle: !!raw.shuffle,
       loopEnd: raw.loopEnd ?? null,
@@ -60,27 +62,48 @@
     };
   }
 
-  function createLayer({ videoId, videoIds, playlistId = '', sourceUrl, startSeconds = 0, title, type = 'other' }) {
-    return normalizeLayer({ videoId, videoIds, playlistId, sourceUrl, startSeconds, title, type });
+  function createLayer({
+    provider = 'youtube',
+    videoId,
+    videoIds,
+    playlistId = '',
+    isSet = false,
+    sourceUrl,
+    startSeconds = 0,
+    title,
+    type = 'other',
+  }) {
+    return normalizeLayer({
+      provider, videoId, videoIds, playlistId, isSet, sourceUrl, startSeconds, title, type,
+    });
+  }
+
+  function isSoundCloud(layer) {
+    return layer?.provider === 'soundcloud';
   }
 
   function primaryVideoId(layer) {
     return (layer && layer.videoIds && layer.videoIds[0]) || '';
   }
 
-  /** True for a linked YouTube playlist (as opposed to a list built here). */
-  function isYouTubePlaylist(layer) {
+  /**
+   * True for a list the app cannot reorder: a linked YouTube playlist or a
+   * SoundCloud set. Both belong to the platform, not to this layer.
+   */
+  function isLinkedPlaylist(layer) {
+    if (isSoundCloud(layer)) return !!layer.isSet;
     return !!(layer && layer.playlistId);
   }
 
-  /** True whenever the layer plays more than one video, either way. */
+  /** True whenever the layer plays more than one track, either way. */
   function isPlaylist(layer) {
-    return isYouTubePlaylist(layer) || (layer?.videoIds?.length || 0) > 1;
+    return isLinkedPlaylist(layer) || (layer?.videoIds?.length || 0) > 1;
   }
 
-  /** Canonical watch/playlist URL for a layer — used for links and oEmbed. */
+  /** Canonical URL for a layer — used for links and title lookups. */
   function layerWatchUrl(layer) {
-    if (isYouTubePlaylist(layer)) return `https://www.youtube.com/playlist?list=${layer.playlistId}`;
+    if (isSoundCloud(layer)) return layer.sourceUrl || 'https://soundcloud.com';
+    if (layer?.playlistId) return `https://www.youtube.com/playlist?list=${layer.playlistId}`;
     return `https://www.youtube.com/watch?v=${primaryVideoId(layer)}`;
   }
 
@@ -190,7 +213,7 @@
     queueSection.className = 'layer-queue';
     // A linked YouTube playlist is owned by YouTube — its entries cannot be
     // edited from here, so the queue editor only applies to local lists.
-    queueSection.hidden = isYouTubePlaylist(layer);
+    queueSection.hidden = isLinkedPlaylist(layer) || isSoundCloud(layer);
 
     const queueList = document.createElement('ol');
     queueList.className = 'layer-queue-list';
@@ -348,12 +371,19 @@
    */
   function renderQueue(layer, refs, actions, titleFor) {
     const ids = layer.videoIds || [];
-    const linked = isYouTubePlaylist(layer);
+    const linked = isLinkedPlaylist(layer) || isSoundCloud(layer);
 
-    refs.playlistBadge.hidden = !isPlaylist(layer);
-    refs.playlistBadge.textContent = linked
-      ? '☰ YouTube-Playlist'
-      : `☰ Playlist (${ids.length})`;
+    refs.playlistBadge.hidden = !isPlaylist(layer) && !isSoundCloud(layer);
+    if (isSoundCloud(layer)) {
+      refs.playlistBadge.textContent = layer.isSet ? '☁ SoundCloud-Set' : '☁ SoundCloud';
+    } else {
+      refs.playlistBadge.textContent = linked
+        ? '☰ YouTube-Playlist'
+        : `☰ Playlist (${ids.length})`;
+    }
+    // SoundCloud's widget offers no shuffle, so the control is hidden there
+    // rather than shown as a button that silently does nothing.
+    refs.shuffleBtn.hidden = isSoundCloud(layer);
     refs.playlistRow.hidden = !isPlaylist(layer);
     refs.startRow.hidden = isPlaylist(layer);
     refs.queueSection.hidden = linked;
@@ -436,7 +466,8 @@
     createLayer,
     buildLayerElement,
     isPlaylist,
-    isYouTubePlaylist,
+    isLinkedPlaylist,
+    isSoundCloud,
     primaryVideoId,
     layerWatchUrl,
     renderQueue,

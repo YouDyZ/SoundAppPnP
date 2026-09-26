@@ -279,6 +279,22 @@
     });
   }
 
+  /**
+   * Plays a one-shot sound: loadVideoById with an end point starts playback at
+   * `startSeconds` and stops it again at `endSeconds`, so an effect can be cut
+   * out of a longer video and never runs on.
+   */
+  function playOnce(id, { videoId, startSeconds = 0, endSeconds = null, volume = 80 } = {}) {
+    withPlayer(id, (player) => {
+      try {
+        player.setVolume(volume);
+        const request = { videoId, startSeconds: startSeconds || 0 };
+        if (endSeconds != null && endSeconds > (startSeconds || 0)) request.endSeconds = endSeconds;
+        player.loadVideoById(request);
+      } catch { /* ignore */ }
+    });
+  }
+
   function setLayerVolume(id, volume) {
     withPlayer(id, (player) => player.setVolume(volume));
   }
@@ -318,6 +334,7 @@
     createPlayer,
     playLayer,
     stopLayer,
+    playOnce,
     setLayerVolume,
     setLayerQueue,
     nextVideo,

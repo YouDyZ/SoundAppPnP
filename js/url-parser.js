@@ -142,17 +142,95 @@
     return { ok: false, reason: 'no-video-id' };
   }
 
+  const SOUNDCLOUD_HOSTS = new Set([
+    'soundcloud.com',
+    'www.soundcloud.com',
+    'm.soundcloud.com',
+    'on.soundcloud.com',
+  ]);
+
+  // Profile-level and editorial paths that are not a playable track/set.
+  const SOUNDCLOUD_RESERVED = new Set([
+    'discover', 'search', 'stream', 'upload', 'you', 'charts', 'tags', 'people', 'pages', 'settings',
+  ]);
+
+  /**
+   * SoundCloud is addressed by its permalink URL — the widget resolves it
+   * server-side, so no id extraction and no API key is needed here.
+   * Returns { ok: true, provider: 'soundcloud', kind: 'track'|'playlist', sourceUrl, startSeconds }
+   */
+  function parseSoundCloudUrl(url, trimmed) {
+    const segments = url.pathname.split('/').filter(Boolean);
+
+    // on.soundcloud.com/xxxx short links carry no structure to validate.
+    if (url.hostname.toLowerCase() === 'on.soundcloud.com') {
+      if (!segments.length) return { ok: false, reason: 'sc-no-track' };
+      return { ok: true, provider: 'soundcloud', kind: 'track', sourceUrl: trimmed, startSeconds: 0 };
+    }
+
+    if (!segments.length) return { ok: false, reason: 'sc-no-track' };
+    if (SOUNDCLOUD_RESERVED.has(segments[0].toLowerCase())) return { ok: false, reason: 'sc-no-track' };
+    // /artist alone is a profile, not something that can be played.
+    if (segments.length < 2) return { ok: false, reason: 'sc-profile-only' };
+
+    const isSet = segments[1].toLowerCase() === 'sets';
+    if (isSet && segments.length < 3) return { ok: false, reason: 'sc-no-track' };
+
+    // Strip tracking noise but keep the permalink (and ?in= for a track in a set).
+    const clean = new URL(url.toString());
+    clean.hash = '';
+    [...clean.searchParams.keys()].forEach((key) => {
+      if (key !== 'in') clean.searchParams.delete(key);
+    });
+
+    return {
+      ok: true,
+      provider: 'soundcloud',
+      kind: isSet ? 'playlist' : 'track',
+      sourceUrl: clean.toString(),
+      startSeconds: 0,
+    };
+  }
+
+  /**
+   * Front door for anything pasted into the app: dispatches to the YouTube or
+   * the SoundCloud parser and tags the result with its provider.
+   */
+  function parseSourceUrl(input) {
+    const trimmed = (input ?? '').trim();
+    if (!trimmed) return { ok: false, reason: 'empty' };
+
+    let host = '';
+    try {
+      host = new URL(trimmed).hostname.toLowerCase();
+    } catch { /* not a URL — fall through to the YouTube parser's id handling */ }
+
+    if (SOUNDCLOUD_HOSTS.has(host)) {
+      return parseSoundCloudUrl(new URL(trimmed), trimmed);
+    }
+
+    const parsed = parseYouTubeUrl(trimmed);
+    return parsed.ok ? { ...parsed, provider: 'youtube' } : parsed;
+  }
+
   const PARSE_ERROR_MESSAGES = {
     empty: '',
     'invalid-url': 'Das ist keine gültige URL.',
-    'unsupported-host': 'Nur YouTube- oder YouTube-Music-Links werden unterstützt.',
+    'unsupported-host': 'Unterstützt werden YouTube-, YouTube-Music- und SoundCloud-Links.',
     'no-video-id': 'In diesem Link konnte keine Video-ID gefunden werden.',
     'invalid-video-id': 'Die Video-ID sieht ungültig aus.',
     'playlist-private': 'Private Listen („Später ansehen", „Gefällt mir") lassen sich nicht einbetten.',
     'playlist-mix': 'Automatische Mixe/Radios lassen sich nicht einbetten — nimm eine richtige Playlist oder ein einzelnes Video.',
     'invalid-playlist-id': 'Die Playlist-ID sieht ungültig aus.',
+    'sc-no-track': 'In diesem SoundCloud-Link steckt kein Track — verlinke einen Track oder ein Set.',
+    'sc-profile-only': 'Das ist ein SoundCloud-Profil, kein Track — öffne einen einzelnen Track oder ein Set.',
   };
 
   window.SB = window.SB || {};
-  window.SB.urlParser = { parseYouTubeUrl, classifyListId, PARSE_ERROR_MESSAGES };
+  window.SB.urlParser = {
+    parseSourceUrl,
+    parseYouTubeUrl,
+    classifyListId,
+    PARSE_ERROR_MESSAGES,
+  };
 })();
