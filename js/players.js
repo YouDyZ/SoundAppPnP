@@ -115,6 +115,7 @@
     setLayerLoop: forward('setLayerLoop'),
     setLayerShuffle: forward('setLayerShuffle'),
     getCurrentTime: forward('getCurrentTime'),
+    describeState: forward('describeState'),
     isLayerReady: forward('isLayerReady'),
     getPlayer: forward('getPlayer'),
   };

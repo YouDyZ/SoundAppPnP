@@ -208,6 +208,10 @@
     const noticeBadge = document.createElement('div');
     noticeBadge.className = 'layer-notice';
 
+    // Only visible with ?debug=1 (see startDiagnostics).
+    const debugLine = document.createElement('div');
+    debugLine.className = 'layer-debug';
+
     const expandedPanel = document.createElement('div');
     expandedPanel.className = 'layer-expanded-panel';
 
@@ -312,7 +316,7 @@
     startRow.append(startLabel, setStartBtn);
     expandedPanel.append(playerWrapper, queueSection, playlistRow, startRow);
 
-    root.append(bar, errorBadge, noticeBadge, expandedPanel);
+    root.append(bar, errorBadge, noticeBadge, debugLine, expandedPanel);
 
     if (layer.isExpanded) {
       root.classList.add('expanded');
@@ -331,6 +335,7 @@
         expandBtn,
         errorBadge,
         noticeBadge,
+        debugLine,
         playerWrapper,
         playerContainer,
         startLabel,

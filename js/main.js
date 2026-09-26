@@ -16,6 +16,7 @@
     fetchTitle,
     fetchPlaylistPosition,
     getCurrentTime,
+    describeState,
   } = window.SB.players;
   const { describePlayerError, getEmbedContext } = window.SB.youtubeApi;
   const { parseSourceUrl, PARSE_ERROR_MESSAGES } = window.SB.urlParser;
@@ -1072,6 +1073,44 @@
     box.append(title, text, code, after, link);
   }
 
+  /* ---------------- Diagnose (?debug=1) ---------------- */
+
+  const PLAYER_STATES = {
+    '-1': 'nicht gestartet', 0: 'beendet', 1: 'spielt', 2: 'pausiert', 3: 'puffert', 5: 'geladen (cued)',
+  };
+
+  /**
+   * With ?debug=1 every layer shows what its player actually reports. This is
+   * the readout to copy when a layer misbehaves on a machine that can reach
+   * YouTube — the app itself cannot see any of this from here.
+   */
+  function startDiagnostics() {
+    if (new URLSearchParams(window.location.search).get('debug') !== '1') return;
+    document.body.classList.add('debug-on');
+
+    const tick = () => {
+      state.layers.forEach((layer) => {
+        const entry = layerRefs.get(layer.id);
+        if (!entry) return;
+        const info = describeState(layer.id) || {};
+        const provider = layer.provider === 'soundcloud' ? 'SC' : 'YT';
+        const stateLabel = info.state == null ? '–' : (PLAYER_STATES[String(info.state)] || info.state);
+        entry.refs.debugLine.textContent = [
+          provider,
+          `ready=${info.ready ? 'ja' : 'nein'}`,
+          `state=${stateLabel}`,
+          `liste=${info.playlistLength ?? 0}`,
+          `index=${info.playlistIndex ?? '–'}`,
+          `queue=${layer.videoIds.length}`,
+          `playlistId=${layer.playlistId || '–'}`,
+          `video=${info.videoId || '–'}`,
+        ].join('  ·  ');
+      });
+    };
+    tick();
+    setInterval(tick, 1000);
+  }
+
   /* ---------------- Boot ---------------- */
 
   async function boot() {
@@ -1096,6 +1135,8 @@
       renderAllActions();
     }
     renderSidebar();
+
+    startDiagnostics();
 
     window.addEventListener('beforeunload', () => flushAutosave(getWorkingStateSnapshot));
     document.addEventListener('visibilitychange', () => {

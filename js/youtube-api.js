@@ -1,4 +1,7 @@
 (function () {
+  const PLAYING = 1;
+  const BUFFERING = 3;
+
   let apiReady = false;
   const pendingCreations = [];
   const players = new Map();
@@ -136,10 +139,16 @@
         playerVars.playlist = videoIds.slice(1).join(',');
       }
 
-      const player = new YT.Player(containerEl, {
-        videoId: playlistId ? undefined : videoIds[0],
+      // The videoId key is left out entirely for a playlist — an explicit
+      // `undefined` risks the API building an /embed/undefined URL.
+      const playerOptions = {
         host: 'https://www.youtube.com',
         playerVars,
+      };
+      if (!playlistId && videoIds[0]) playerOptions.videoId = videoIds[0];
+
+      const player = new YT.Player(containerEl, {
+        ...playerOptions,
         events: {
           onReady: (event) => {
             readyFlags.set(id, true);
@@ -220,11 +229,31 @@
    */
   function setLayerQueue(id, videoIds, { loop = false, shuffle = false } = {}) {
     withPlayer(id, (player) => {
+      // Cueing means "load but do not play", so swapping the list while the
+      // layer is running would silence it. When it is playing, the list is
+      // loaded in the playing variant instead, keeping the current entry.
+      let wasPlaying = false;
+      let index = 0;
+      try {
+        wasPlaying = player.getPlayerState?.() === PLAYING;
+        const current = player.getPlaylistIndex?.();
+        if (typeof current === 'number' && current > 0) index = current;
+      } catch { /* ignore */ }
+      if (index >= videoIds.length) index = 0;
+
       try {
         if (videoIds.length > 1) {
-          player.cuePlaylist({ playlist: videoIds });
+          if (wasPlaying) {
+            player.loadPlaylist({ playlist: videoIds, index });
+          } else {
+            player.cuePlaylist({ playlist: videoIds });
+          }
         } else if (videoIds.length === 1) {
-          player.cueVideoById(videoIds[0]);
+          if (wasPlaying) {
+            player.loadVideoById(videoIds[0]);
+          } else {
+            player.cueVideoById(videoIds[0]);
+          }
         }
       } catch { /* ignore */ }
       // Same care as in applyPlaylistSettings: only switch these on, never
@@ -304,9 +333,6 @@
     }
   }
 
-  const PLAYING = 1;
-  const BUFFERING = 3;
-
   function playLayer(id, startSeconds = 0, { isPlaylist = false } = {}) {
     withPlayer(id, (player) => {
       if (!isPlaylist) {
@@ -368,6 +394,23 @@
     }
   }
 
+  /** Live player facts for the diagnostics readout (?debug=1). */
+  function describeState(id) {
+    const player = players.get(id);
+    if (!player) return { ready: false, note: 'kein Player' };
+    const read = (fn, fallback) => {
+      try { return fn(); } catch { return fallback; }
+    };
+    return {
+      ready: !!readyFlags.get(id),
+      state: read(() => player.getPlayerState?.(), null),
+      playlistLength: read(() => (player.getPlaylist?.() || []).length, 0),
+      playlistIndex: read(() => player.getPlaylistIndex?.(), null),
+      videoId: read(() => player.getVideoData?.().video_id || '', ''),
+      iframeSrc: read(() => player.getIframe?.().src || '', ''),
+    };
+  }
+
   function isLayerReady(id) {
     return !!readyFlags.get(id);
   }
@@ -404,6 +447,7 @@
     resolvePlaylistEntries,
     getCurrentTime,
     isLayerReady,
+    describeState,
     getPlayer,
     destroyPlayer,
     getEmbedContext,

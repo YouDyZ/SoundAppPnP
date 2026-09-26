@@ -149,6 +149,15 @@ Video-ID (2), HTML5-Problem (5), Video gelöscht/privat (100) sowie vom
 Rechteinhaber deaktivierte Einbettung (101/150). Dazu gibt es jeweils einen
 Link, um das Video direkt auf YouTube zu öffnen.
 
+## Diagnose
+
+Wenn eine Ebene sich seltsam verhält, `?debug=1` an die URL hängen
+(`http://localhost:8000/?debug=1`). Jede Ebene zeigt dann eine Zeile mit dem,
+was ihr Player tatsächlich meldet — Bereitschaft, Abspielzustand, Länge der
+Playlist laut Player, aktueller Index, Länge der Queue und die Playlist-ID,
+solange sie noch nicht übernommen wurde. Genau diese Zeile ist das, was bei
+einem Fehlerbericht weiterhilft.
+
 ## Grenzen
 
 - Private Listen („Später ansehen“, „Gefällt mir“) und automatische

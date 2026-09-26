@@ -845,3 +845,15 @@ button, input, select {
   padding: 0.2rem 0.5rem;
   font-size: 0.75rem;
 }
+
+/* Diagnose-Zeile, nur mit ?debug=1 sichtbar */
+.layer-debug { display: none; }
+
+.debug-on .layer-debug {
+  display: block;
+  padding: 0 0.9rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  word-break: break-all;
+}
