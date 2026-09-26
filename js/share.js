@@ -1,7 +1,12 @@
 (function () {
   const LAYER_TYPES = window.SB.layer.LAYER_TYPES;
 
-  const FORMAT_VERSION = '1';
+  const FORMAT_VERSION = '2';
+  const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+  // '.' is outside the base64url alphabet YouTube ids use, so it can join them.
+  const ID_SEPARATOR = '.';
+  const FLAG_LOOP = 1;
+  const FLAG_SHUFFLE = 2;
   const TYPE_TO_DIGIT = Object.fromEntries(LAYER_TYPES.map((t, i) => [t.value, String(i)]));
   const DIGIT_TO_TYPE = Object.fromEntries(LAYER_TYPES.map((t, i) => [String(i), t.value]));
 
@@ -60,43 +65,79 @@
 
   function encodeLayersToShareString(layers) {
     const body = layers
-      .map((l) => [
-        l.videoId,
-        TYPE_TO_DIGIT[l.type] ?? '3',
-        Math.round(clamp(l.volume, 0, 100)).toString(36),
-        Math.max(0, Math.round(l.startSeconds || 0)).toString(36),
-        encodeField(l.title || ''),
-      ].join(','))
+      .map((l) => {
+        const flags = (l.loop ? FLAG_LOOP : 0) | (l.shuffle ? FLAG_SHUFFLE : 0);
+        return [
+          (l.videoIds || []).join(ID_SEPARATOR),
+          l.playlistId || '',
+          TYPE_TO_DIGIT[l.type] ?? '3',
+          Math.round(clamp(l.volume, 0, 100)).toString(36),
+          Math.max(0, Math.round(l.startSeconds || 0)).toString(36),
+          flags.toString(36),
+          encodeField(l.title || ''),
+        ].join(',');
+      })
       .join(';');
     return `${FORMAT_VERSION}:${body}`;
   }
 
+  /** v1 tuple: videoId,type,volume,start,title */
+  function decodeLayerV1(fields) {
+    if (fields.length < 5) throw new Error('malformed tuple');
+    const [videoId, typeDigit, volB36, startB36, encodedName] = fields;
+    if (!VIDEO_ID_RE.test(videoId)) throw new Error('bad video id');
+    return {
+      videoIds: [videoId],
+      playlistId: '',
+      type: DIGIT_TO_TYPE[typeDigit] || 'other',
+      volume: clamp(parseInt(volB36, 36) || 0, 0, 100),
+      startSeconds: Math.max(0, parseInt(startB36, 36) || 0),
+      loop: false,
+      shuffle: false,
+      title: decodeField(encodedName),
+      sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    };
+  }
+
+  /** v2 tuple: videoIds,playlistId,type,volume,start,flags,title */
+  function decodeLayerV2(fields) {
+    if (fields.length < 7) throw new Error('malformed tuple');
+    const [ids, playlistId, typeDigit, volB36, startB36, flagsB36, encodedName] = fields;
+    const videoIds = ids ? ids.split(ID_SEPARATOR).filter(Boolean) : [];
+    if (!playlistId && !videoIds.length) throw new Error('neither video nor playlist');
+    if (videoIds.some((id) => !VIDEO_ID_RE.test(id))) throw new Error('bad video id');
+    if (playlistId && !/^[A-Za-z0-9_-]{12,}$/.test(playlistId)) throw new Error('bad playlist id');
+    const flags = parseInt(flagsB36, 36) || 0;
+    return {
+      videoIds,
+      playlistId,
+      type: DIGIT_TO_TYPE[typeDigit] || 'other',
+      volume: clamp(parseInt(volB36, 36) || 0, 0, 100),
+      startSeconds: Math.max(0, parseInt(startB36, 36) || 0),
+      loop: !!(flags & FLAG_LOOP),
+      shuffle: !!(flags & FLAG_SHUFFLE),
+      title: decodeField(encodedName),
+      sourceUrl: playlistId
+        ? `https://www.youtube.com/playlist?list=${playlistId}`
+        : `https://www.youtube.com/watch?v=${videoIds[0]}`,
+    };
+  }
+
+  /** Older links stay readable: v1 shares are still decoded, just never written. */
   function decodeShareString(str) {
     if (typeof str !== 'string' || !str) return { ok: false, reason: 'empty' };
     const sepIndex = str.indexOf(':');
     if (sepIndex === -1) return { ok: false, reason: 'invalid-format' };
     const version = str.slice(0, sepIndex);
-    if (version !== FORMAT_VERSION) return { ok: false, reason: 'unsupported-version' };
+    const decodeLayer = version === '1' ? decodeLayerV1 : version === '2' ? decodeLayerV2 : null;
+    if (!decodeLayer) return { ok: false, reason: 'unsupported-version' };
     const body = str.slice(sepIndex + 1);
     if (!body) return { ok: true, layers: [] };
 
     try {
       const layers = splitEscaped(body, ';')
         .filter((tuple) => tuple.length > 0)
-        .map((tuple) => {
-          const fields = splitEscaped(tuple, ',');
-          if (fields.length < 5) throw new Error('malformed tuple');
-          const [videoId, typeDigit, volB36, startB36, encodedName] = fields;
-          if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) throw new Error('bad video id');
-          return {
-            videoId,
-            type: DIGIT_TO_TYPE[typeDigit] || 'other',
-            volume: clamp(parseInt(volB36, 36) || 0, 0, 100),
-            startSeconds: Math.max(0, parseInt(startB36, 36) || 0),
-            title: decodeField(encodedName),
-            sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-          };
-        });
+        .map((tuple) => decodeLayer(splitEscaped(tuple, ',')));
       return { ok: true, layers };
     } catch {
       return { ok: false, reason: 'parse-error' };

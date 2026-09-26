@@ -180,6 +180,23 @@ button, input, select {
 
 .btn-block { width: 100%; }
 
+/* Breathing room between "Neue Sammlung" and the save actions, and between
+   the two save buttons themselves. */
+#new-collection-btn { margin-top: 0.75rem; }
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.toggle-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .icon-btn-plain {
   background: none;
   border: none;
@@ -558,3 +575,109 @@ button, input, select {
     padding-top: 3.5rem;
   }
 }
+
+/* ---------------- Playlist / Queue ---------------- */
+
+.layer-playlist-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.layer-playlist-badge[hidden] { display: none; }
+
+.layer-playlist-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.layer-playlist-row[hidden],
+.layer-start-row[hidden],
+.layer-queue[hidden] { display: none; }
+
+.layer-track-label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.layer-queue {
+  margin-top: 0.75rem;
+}
+
+.layer-queue-list {
+  /* The items are flex containers, which suppresses list markers — so the
+     position is drawn from a counter instead. */
+  list-style: none;
+  counter-reset: queue-item;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+
+.layer-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.layer-queue-item::before {
+  counter-increment: queue-item;
+  content: counter(queue-item) ".";
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 1.4em;
+}
+
+.layer-queue-item:nth-child(odd) { background: var(--bg-elevated); }
+
+.layer-queue-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-queue-item .icon-btn-plain:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.layer-queue-add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.layer-queue-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.layer-queue-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.layer-queue-error { margin-top: 0.4rem; }

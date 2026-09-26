@@ -57,15 +57,31 @@ müsste oder könnte. Der "Bei YouTube anmelden"-Button in der Seitenleiste
   einfügen — wird automatisch als neue Ebene übernommen (kein Klick auf „+“
   nötig), alternativ „+“ klicken. Unterstützt `watch?v=`, `youtu.be/`,
   `music.youtube.com`, `/shorts/`, `/embed/`, `/live/` sowie reine Video-IDs.
+- **Playlists**: zwei Wege, beide pro Ebene.
+  1. *Fertige YouTube-Playlist verlinken* — `playlist?list=…` einfügen (oder
+     einen `watch?v=…&list=…`-Link, dann startet die Ebene bei diesem Video).
+     Die Ebene zeigt „☰ YouTube-Playlist“; die Reihenfolge gehört YouTube und
+     wird hier nicht bearbeitet.
+  2. *Eigene Liste in der Ebene bauen* — Ebene aufklappen und unter
+     „Weiteres Video an diese Ebene anhängen…“ beliebig viele Videos
+     hinzufügen, sortieren (▲▼) oder entfernen (✕). Ab zwei Videos wird die
+     Ebene zur Playlist („☰ Playlist (n)“).
+
+  In beiden Fällen gibt es pro Ebene ⏮/⏭ zum Springen sowie die Schalter
+  🔁 **Endlos** (Playlist wiederholen) und 🔀 **Zufall**. Beides wird
+  mitgespeichert und mitgeteilt.
 - **Lautstärke**: Regler pro Ebene.
 - **Start/Stop**: pro Ebene individuell, oder „Alle abspielen“ / „Alle stoppen“
   oben für alle Ebenen gleichzeitig.
 - **Aufklappen**: zeigt den echten YouTube-Player mit normalem Scrubber, um im
   Video zu navigieren. „Startpunkt hier setzen“ merkt sich die aktuelle
   Position als neuen Startpunkt der Ebene.
-- **Sammlungen** (linke Seitenleiste): aktuelle Ebenen unter einem Namen
-  speichern, laden, umbenennen, löschen. Bei ungespeicherten Änderungen wird
-  vor dem Wechseln nachgefragt.
+- **Sammlungen** (linke Seitenleiste): „＋ Neue Sammlung“ legt eine leere
+  Sammlung unter einem Namen an und räumt die Arbeitsfläche frei;
+  „Speichern unter…“ sichert die aktuellen Ebenen als neue Sammlung.
+  Sammlungen lassen sich laden, umbenennen und löschen — alles im
+  `localStorage` des Browsers. Bei ungespeicherten Änderungen wird vor dem
+  Wechseln nachgefragt.
 - **Link teilen**: erzeugt einen Link mit allen aktuellen Ebenen (Name, Video,
   Lautstärke, Startpunkt, Typ) zum Weitergeben. Beim Öffnen eines solchen Links
   fragt die App nach, ob als neue Sammlung gespeichert oder in die aktuelle
@@ -104,10 +120,28 @@ Link, um das Video direkt auf YouTube zu öffnen.
 
 ## Grenzen
 
-- Playlists (`/playlist?list=`) werden nicht unterstützt, nur einzelne Videos.
+- Private Listen („Später ansehen“, „Gefällt mir“) und automatische
+  Mixe/Radios (`list=RD…`) lassen sich nicht einbetten. Enthält ein
+  Video-Link zusätzlich so eine Liste, wird nur das Video übernommen.
 - Manche Videos deaktivieren die Einbettung von Seiten Dritter — die App zeigt
   das dann pro Ebene an, statt stillschweigend nichts abzuspielen.
 - Ohne HTTP-Server (also über `file://`) ist keine Wiedergabe möglich, siehe
   Fehlerbehebung.
 - Loop-Bereiche und mehrere Cue-Punkte pro Ebene sind vorbereitet, aber noch
   nicht umgesetzt (nur ein einzelner Startpunkt pro Ebene in dieser Version).
+  Bei Playlist-Ebenen entfällt der Startpunkt ganz, weil er sich immer nur auf
+  ein einzelnes Video beziehen könnte.
+
+## Lizenz
+
+[PolyForm Noncommercial License 1.0.0](LICENSE.md) — Nutzung, Änderung und
+Weitergabe sind für **nicht-kommerzielle** Zwecke erlaubt (privat, Hobby,
+Lehre, gemeinnützige Organisationen). Für kommerzielle Nutzung braucht es eine
+gesonderte Erlaubnis des Rechteinhabers.
+
+Hinweis: Das ist bewusst keine OSI-Open-Source-Lizenz — eine Beschränkung auf
+nicht-kommerzielle Nutzung schließt das per Definition aus.
+
+Die Lizenz gilt für den Code dieser App. Die über YouTube eingebundenen Inhalte
+gehören ihren jeweiligen Rechteinhabern; für deren Nutzung gelten die
+YouTube-Nutzungsbedingungen.

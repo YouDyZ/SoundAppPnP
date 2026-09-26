@@ -1,6 +1,15 @@
 (function () {
   const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
+  // Playlists YouTube lets third parties embed: user playlists (PL), channel
+  // uploads (UU), auto-generated album/chart lists (OL) and the legacy
+  // favourites//topic variants (FL/TL/UL).
+  const PLAYLIST_ID_RE = /^(?:PL|UU|OL|FL|TL|UL)[A-Za-z0-9_-]{10,}$/;
+  // "Watch later" and "Liked videos" are per-account and never embeddable.
+  const PRIVATE_LIST_RE = /^(?:WL|LL)/;
+  // RD… are auto-generated mixes/radios; YouTube refuses them in embeds.
+  const MIX_LIST_RE = /^RD/;
+
   const ALLOWED_HOSTS = new Set([
     'youtube.com',
     'www.youtube.com',
@@ -21,6 +30,18 @@
     return hours * 3600 + minutes * 60 + seconds;
   }
 
+  /**
+   * Classifies a `list=` value: 'playlist' (embeddable), 'private' (WL/LL),
+   * 'mix' (auto-generated RD…) or 'invalid'.
+   */
+  function classifyListId(listId) {
+    if (!listId) return 'invalid';
+    if (PRIVATE_LIST_RE.test(listId)) return 'private';
+    if (MIX_LIST_RE.test(listId)) return 'mix';
+    if (PLAYLIST_ID_RE.test(listId)) return 'playlist';
+    return 'invalid';
+  }
+
   function extractStartSeconds(searchParams) {
     const raw = searchParams.get('t') ?? searchParams.get('start');
     const parsed = parseDurationParam(raw);
@@ -28,16 +49,29 @@
   }
 
   /**
-   * Parses a pasted string into a YouTube video reference.
-   * Returns { ok: true, videoId, startSeconds } or { ok: false, reason }.
-   * reason is one of: empty | invalid-url | unsupported-host | no-video-id | invalid-video-id | playlist-only
+   * Parses a pasted string into a YouTube reference.
+   * Returns one of
+   *   { ok: true, kind: 'video', videoId, startSeconds }
+   *   { ok: true, kind: 'playlist', playlistId, videoId, startSeconds }
+   * or { ok: false, reason }.
+   *
+   * A link that carries BOTH a video and a usable `list=` becomes a playlist
+   * starting at that video. If the `list=` is one YouTube won't embed (a mix,
+   * "watch later", garbage) but a video id is present, the video wins — pasting
+   * a normal watch URL that happens to trail a mix parameter must keep working.
+   *
+   * reason is one of: empty | invalid-url | unsupported-host | no-video-id |
+   * invalid-video-id | playlist-private | playlist-mix | invalid-playlist-id
    */
   function parseYouTubeUrl(input) {
     const trimmed = (input ?? '').trim();
     if (!trimmed) return { ok: false, reason: 'empty' };
 
     if (VIDEO_ID_RE.test(trimmed)) {
-      return { ok: true, videoId: trimmed, startSeconds: 0 };
+      return { ok: true, kind: 'video', videoId: trimmed, startSeconds: 0 };
+    }
+    if (PLAYLIST_ID_RE.test(trimmed)) {
+      return { ok: true, kind: 'playlist', playlistId: trimmed, videoId: '', startSeconds: 0 };
     }
 
     let url;
@@ -48,12 +82,34 @@
     }
 
     const host = url.hostname.toLowerCase();
+    const listId = url.searchParams.get('list');
+    const listKind = listId ? classifyListId(listId) : null;
+    const startSeconds = extractStartSeconds(url.searchParams);
+
+    /** Playlist result when the list is usable, otherwise the plain video. */
+    function withList(videoId) {
+      if (listKind === 'playlist') {
+        return { ok: true, kind: 'playlist', playlistId: listId, videoId: videoId || '', startSeconds };
+      }
+      return { ok: true, kind: 'video', videoId, startSeconds };
+    }
+
+    /** No video id to fall back on — an unusable list is a hard error here. */
+    function listOnly() {
+      if (listKind === 'playlist') {
+        return { ok: true, kind: 'playlist', playlistId: listId, videoId: '', startSeconds };
+      }
+      if (listKind === 'private') return { ok: false, reason: 'playlist-private' };
+      if (listKind === 'mix') return { ok: false, reason: 'playlist-mix' };
+      if (listKind === 'invalid') return { ok: false, reason: 'invalid-playlist-id' };
+      return { ok: false, reason: 'no-video-id' };
+    }
 
     if (host === 'youtu.be') {
       const id = url.pathname.split('/').filter(Boolean)[0];
-      if (!id) return { ok: false, reason: 'no-video-id' };
+      if (!id) return listOnly();
       if (!VIDEO_ID_RE.test(id)) return { ok: false, reason: 'invalid-video-id' };
-      return { ok: true, videoId: id, startSeconds: extractStartSeconds(url.searchParams) };
+      return withList(id);
     }
 
     if (!ALLOWED_HOSTS.has(host)) {
@@ -63,26 +119,25 @@
     const segments = url.pathname.split('/').filter(Boolean);
     const firstSegment = segments[0] || '';
 
+    if (firstSegment === 'playlist') {
+      return listOnly();
+    }
+
     if (firstSegment === 'watch' || url.pathname === '/watch') {
       const v = url.searchParams.get('v');
-      if (!v) {
-        if (url.searchParams.get('list')) return { ok: false, reason: 'playlist-only' };
-        return { ok: false, reason: 'no-video-id' };
-      }
+      if (!v) return listOnly();
       if (!VIDEO_ID_RE.test(v)) return { ok: false, reason: 'invalid-video-id' };
-      return { ok: true, videoId: v, startSeconds: extractStartSeconds(url.searchParams) };
+      return withList(v);
     }
 
     if (PATH_ID_SEGMENTS.has(firstSegment)) {
       const id = segments[1];
-      if (!id) return { ok: false, reason: 'no-video-id' };
+      if (!id) return listOnly();
       if (!VIDEO_ID_RE.test(id)) return { ok: false, reason: 'invalid-video-id' };
-      return { ok: true, videoId: id, startSeconds: extractStartSeconds(url.searchParams) };
+      return withList(id);
     }
 
-    if (firstSegment === 'playlist') {
-      return { ok: false, reason: 'playlist-only' };
-    }
+    if (listId) return listOnly();
 
     return { ok: false, reason: 'no-video-id' };
   }
@@ -93,9 +148,11 @@
     'unsupported-host': 'Nur YouTube- oder YouTube-Music-Links werden unterstützt.',
     'no-video-id': 'In diesem Link konnte keine Video-ID gefunden werden.',
     'invalid-video-id': 'Die Video-ID sieht ungültig aus.',
-    'playlist-only': 'Playlists werden nicht unterstützt — bitte verlinke ein einzelnes Video.',
+    'playlist-private': 'Private Listen („Später ansehen", „Gefällt mir") lassen sich nicht einbetten.',
+    'playlist-mix': 'Automatische Mixe/Radios lassen sich nicht einbetten — nimm eine richtige Playlist oder ein einzelnes Video.',
+    'invalid-playlist-id': 'Die Playlist-ID sieht ungültig aus.',
   };
 
   window.SB = window.SB || {};
-  window.SB.urlParser = { parseYouTubeUrl, PARSE_ERROR_MESSAGES };
+  window.SB.urlParser = { parseYouTubeUrl, classifyListId, PARSE_ERROR_MESSAGES };
 })();

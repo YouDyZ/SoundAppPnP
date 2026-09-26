@@ -98,7 +98,12 @@
    * READY_TIMEOUT_MS, i.e. the iframe is showing a configuration error of its
    * own that the JS API never surfaces as an onError event.
    */
-  function createPlayer(id, containerEl, { videoId, startSeconds = 0, volume = 80 }, handlers = {}) {
+  function createPlayer(
+    id,
+    containerEl,
+    { videoIds = [], playlistId = '', startSeconds = 0, volume = 80, loop = false, shuffle = false },
+    handlers = {}
+  ) {
     const build = () => {
       const context = getEmbedContext();
       const playerVars = {
@@ -118,8 +123,21 @@
         playerVars.widget_referrer = window.location.href;
       }
 
+      // With listType/list the player loads a whole playlist; YouTube ignores
+      // `videoId` in that case, so the requested start video is selected after
+      // the playlist is known (see applyPlaylistSettings).
+      if (playlistId) {
+        playerVars.listType = 'playlist';
+        playerVars.list = playlistId;
+      } else if (videoIds.length > 1) {
+        // A list assembled in the app: the first video is the player's video,
+        // the rest go into the documented `playlist` parameter and are played
+        // after it — which also makes next/previous, loop and shuffle work.
+        playerVars.playlist = videoIds.slice(1).join(',');
+      }
+
       const player = new YT.Player(containerEl, {
-        videoId,
+        videoId: playlistId ? undefined : videoIds[0],
         host: 'https://www.youtube.com',
         playerVars,
         events: {
@@ -127,9 +145,18 @@
             readyFlags.set(id, true);
             clearReadyWatchdog(id);
             try { event.target.setVolume(volume); } catch { /* ignore */ }
-            try {
-              if (startSeconds > 0) event.target.seekTo(startSeconds, true);
-            } catch { /* ignore */ }
+            if (playlistId || videoIds.length > 1) {
+              applyPlaylistSettings(event.target, {
+                playlistId,
+                videoId: playlistId ? videoIds[0] : '',
+                loop,
+                shuffle,
+              });
+            } else {
+              try {
+                if (startSeconds > 0) event.target.seekTo(startSeconds, true);
+              } catch { /* ignore */ }
+            }
             flushPendingActionsFor(id, event.target);
             handlers.onReady?.(event);
           },
@@ -159,17 +186,96 @@
     }
   }
 
-  function playLayer(id, startSeconds = 0) {
+  /**
+   * Applies loop/shuffle and, when the source link pointed at one particular
+   * video of the playlist, re-cues the playlist at that entry. cuePlaylist()
+   * loads without starting playback, which is what the soundboard wants — the
+   * user decides when a layer starts.
+   */
+  function applyPlaylistSettings(player, { playlistId, videoId, loop, shuffle }) {
+    try { player.setLoop(!!loop); } catch { /* ignore */ }
+    try { player.setShuffle(!!shuffle); } catch { /* ignore */ }
+    if (!videoId) return;
+    try {
+      const entries = player.getPlaylist?.() || [];
+      const index = entries.indexOf(videoId);
+      if (index > 0) {
+        player.cuePlaylist({ list: playlistId, listType: 'playlist', index });
+      }
+    } catch { /* ignore — playlist simply starts at its first entry */ }
+  }
+
+  /**
+   * Swaps the videos a locally assembled layer plays. cuePlaylist() loads the
+   * new list without starting playback; loop/shuffle are re-applied because
+   * cueing resets them.
+   */
+  function setLayerQueue(id, videoIds, { loop = false, shuffle = false } = {}) {
     withPlayer(id, (player) => {
-      player.seekTo(startSeconds || 0, true);
+      try {
+        if (videoIds.length > 1) {
+          player.cuePlaylist({ playlist: videoIds });
+        } else if (videoIds.length === 1) {
+          player.cueVideoById(videoIds[0]);
+        }
+      } catch { /* ignore */ }
+      try { player.setLoop(!!loop); } catch { /* ignore */ }
+      try { player.setShuffle(!!shuffle); } catch { /* ignore */ }
+    });
+  }
+
+  function nextVideo(id) {
+    withPlayer(id, (player) => {
+      try { player.nextVideo(); } catch { /* ignore */ }
+    });
+  }
+
+  function previousVideo(id) {
+    withPlayer(id, (player) => {
+      try { player.previousVideo(); } catch { /* ignore */ }
+    });
+  }
+
+  function setLayerLoop(id, enabled) {
+    withPlayer(id, (player) => {
+      try { player.setLoop(!!enabled); } catch { /* ignore */ }
+    });
+  }
+
+  function setLayerShuffle(id, enabled) {
+    withPlayer(id, (player) => {
+      try { player.setShuffle(!!enabled); } catch { /* ignore */ }
+    });
+  }
+
+  /** { title, index, total } of the video a playlist layer currently holds. */
+  function getPlaylistPosition(id) {
+    const player = players.get(id);
+    if (!player || !readyFlags.get(id)) return null;
+    try {
+      const entries = player.getPlaylist?.() || [];
+      const index = player.getPlaylistIndex?.() ?? -1;
+      const title = player.getVideoData?.().title || '';
+      if (index < 0 || !entries.length) return title ? { title, index: -1, total: 0 } : null;
+      return { title, index, total: entries.length };
+    } catch {
+      return null;
+    }
+  }
+
+  function playLayer(id, startSeconds = 0, { isPlaylist = false } = {}) {
+    withPlayer(id, (player) => {
+      // Seeking a playlist layer would jump inside whichever video happens to
+      // be loaded, so the start point stays a single-video feature.
+      if (!isPlaylist) player.seekTo(startSeconds || 0, true);
       player.playVideo();
     });
   }
 
-  function stopLayer(id, startSeconds = 0) {
+  function stopLayer(id, startSeconds = 0, { isPlaylist = false } = {}) {
     withPlayer(id, (player) => {
       player.pauseVideo();
-      player.seekTo(startSeconds || 0, true);
+      if (!isPlaylist) player.seekTo(startSeconds || 0, true);
     });
   }
 
@@ -213,6 +319,12 @@
     playLayer,
     stopLayer,
     setLayerVolume,
+    setLayerQueue,
+    nextVideo,
+    previousVideo,
+    setLayerLoop,
+    setLayerShuffle,
+    getPlaylistPosition,
     getCurrentTime,
     isLayerReady,
     getPlayer,
