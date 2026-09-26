@@ -73,6 +73,17 @@
     }
   }
 
+  /**
+   * Resolves a linked playlist into plain video ids. Only YouTube can do this
+   * (through the loaded player); SoundCloud sets stay with the widget.
+   */
+  function resolvePlaylistEntries(id) {
+    if (playerProviders.get(id) !== 'youtube') return Promise.resolve([]);
+    return new Promise((resolve) => {
+      window.SB.youtubeApi.resolvePlaylistEntries(id, (entries) => resolve(entries || []));
+    });
+  }
+
   /** Same normalisation for the "which entry of the list is playing" readout. */
   function fetchPlaylistPosition(id) {
     const name = playerProviders.get(id);
@@ -92,6 +103,7 @@
     supports,
     fetchTitle,
     fetchPlaylistPosition,
+    resolvePlaylistEntries,
     providerOf: (id) => playerProviders.get(id) || '',
     playLayer: forward('playLayer'),
     stopLayer: forward('stopLayer'),

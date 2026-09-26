@@ -68,24 +68,27 @@ müsste oder könnte. Der "Bei YouTube anmelden"-Button in der Seitenleiste
   „Ende ⟵ jetzt“ übernehmen die Position aus dem Vorschau-Player, sodass sich
   ein Effekt nach Gehör aus einem längeren Video schneiden lässt. Ohne
   Endpunkt läuft der Sound bis zum Ende des Videos.
-- **Playlists**: zwei Wege, beide pro Ebene.
-  1. *Fertige YouTube-Playlist verlinken* — `playlist?list=…` einfügen (oder
-     einen `watch?v=…&list=…`-Link, dann startet die Ebene bei diesem Video).
-     Die Ebene zeigt „☰ YouTube-Playlist“; die Reihenfolge gehört YouTube und
-     wird hier nicht bearbeitet.
-  2. *Eigene Liste in der Ebene bauen* — Ebene aufklappen und unter
-     „Weiteres Video an diese Ebene anhängen…“ beliebig viele Videos
-     hinzufügen, sortieren (▲▼) oder entfernen (✕). Ab zwei Videos wird die
-     Ebene zur Playlist („☰ Playlist (n)“).
+- **Playlists / Queue**: eine Ebene kann mehrere Videos nacheinander abspielen.
+  Der Inhalt landet immer in der **Queue der Ebene** — also einer Liste, die
+  sich sortieren (▲▼), kürzen (✕) und erweitern lässt:
+  1. *YouTube-Playlist einfügen* — `playlist?list=…` oder ein
+     `watch?v=…&list=…`-Link. Die App lädt die Playlist kurz, liest ihre Videos
+     aus und übernimmt sie als Queue („☰ Playlist wird übernommen…“ →
+     „☰ Playlist (n)“). Danach hängt nichts mehr an YouTubes Reihenfolge; der
+     Name der Playlist bleibt als Ebenenname erhalten.
+  2. *Selbst zusammenstellen* — Ebene aufklappen und unter „Weiteres Video an
+     diese Ebene anhängen…“ beliebig viele Videos hinzufügen. Ab zwei Videos
+     ist die Ebene eine Playlist.
 
-  Bei SoundCloud übernimmt ein **Set** die Rolle der verlinkten Playlist; eine
-  eigene Liste lässt sich dort nicht bauen (das Widget kennt keine
-  zusammengestellten Warteschlangen).
+  Pro Ebene gibt es ⏮/⏭ zum Springen sowie die Schalter 🔁 **Endlos** und
+  🔀 **Zufall**. Beides wird mitgespeichert und mitgeteilt.
 
-  In beiden Fällen gibt es pro Ebene ⏮/⏭ zum Springen sowie die Schalter
-  🔁 **Endlos** und 🔀 **Zufall**. Beides wird mitgespeichert und mitgeteilt.
-  Zufall bietet nur YouTube an — das SoundCloud-Widget kann es nicht, deshalb
-  ist der Schalter dort ausgeblendet statt wirkungslos sichtbar.
+  Bei **SoundCloud** bleibt ein Set beim Widget: ⏮/⏭ funktionieren, die
+  Reihenfolge lässt sich aber nicht hier bearbeiten, weil das Widget keine
+  selbst zusammengestellten Warteschlangen kennt. Zufall bietet nur YouTube
+  an — deshalb ist der Schalter bei SoundCloud ausgeblendet statt
+  wirkungslos sichtbar.
+
 - **Lautstärke**: Regler pro Ebene.
 - **Start/Stop**: pro Ebene individuell, oder „Alle abspielen“ / „Alle stoppen“
   oben für alle Ebenen gleichzeitig.
@@ -148,6 +151,9 @@ Link, um das Video direkt auf YouTube zu öffnen.
 - Private Listen („Später ansehen“, „Gefällt mir“) und automatische
   Mixe/Radios (`list=RD…`) lassen sich nicht einbetten. Enthält ein
   Video-Link zusätzlich so eine Liste, wird nur das Video übernommen.
+- Eine Playlist lässt sich nur übernehmen, solange der Player ihre Videos
+  nennen kann — bei einer privaten oder leeren Playlist meldet die Ebene das,
+  statt still nichts zu tun.
 - Manche Videos deaktivieren die Einbettung von Seiten Dritter — die App zeigt
   das dann pro Ebene an, statt stillschweigend nichts abzuspielen.
 - Ohne HTTP-Server (also über `file://`) ist keine Wiedergabe möglich, siehe

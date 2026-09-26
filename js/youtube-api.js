@@ -224,6 +224,33 @@
     });
   }
 
+  /**
+   * Reads the video ids of a playlist the player loaded. getPlaylist() is empty
+   * for a moment after onReady, so it is polled briefly before giving up. This
+   * is what lets a pasted playlist become an ordinary, editable queue without
+   * needing a Data-API key.
+   */
+  function resolvePlaylistEntries(id, callback, { attempts = 12, intervalMs = 300 } = {}) {
+    const player = players.get(id);
+    if (!player) return callback([]);
+
+    let left = attempts;
+    const tick = () => {
+      let entries = [];
+      try {
+        entries = player.getPlaylist?.() || [];
+      } catch {
+        entries = [];
+      }
+      if (entries.length) return callback(entries.slice());
+      left -= 1;
+      if (left <= 0) return callback([]);
+      setTimeout(tick, intervalMs);
+      return undefined;
+    };
+    tick();
+  }
+
   function nextVideo(id) {
     withPlayer(id, (player) => {
       try { player.nextVideo(); } catch { /* ignore */ }
@@ -342,6 +369,7 @@
     setLayerLoop,
     setLayerShuffle,
     getPlaylistPosition,
+    resolvePlaylistEntries,
     getCurrentTime,
     isLayerReady,
     getPlayer,

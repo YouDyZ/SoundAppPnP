@@ -8,6 +8,7 @@
     playOnce,
     setLayerVolume,
     setLayerQueue,
+    resolvePlaylistEntries,
     nextVideo,
     previousVideo,
     setLayerLoop,
@@ -329,6 +330,7 @@
           setLayerError(refs, '');
           maybeFetchTitle(layer.id, event.target, refs);
           updateTrackLabel(layer.id, refs);
+          adoptPlaylistAsQueue(layer.id, refs);
         },
         onStateChange: (event) => {
           // YouTube reports numeric states, SoundCloud a plain flag.
@@ -365,6 +367,45 @@
     layerRefs.delete(id);
   }
 
+  /**
+   * A pasted YouTube playlist is only a way to *name* a set of videos — the app
+   * turns it into the layer's own queue as soon as the player can name its
+   * entries. From then on the list behaves like any hand-built one: sortable,
+   * trimmable, extendable. The playlist id is dropped so nothing stays tied to
+   * YouTube's own ordering.
+   */
+  function adoptPlaylistAsQueue(id, refs) {
+    const layer = layerLookup(id);
+    if (!layer || !layer.playlistId) return;
+
+    resolvePlaylistEntries(id).then((entries) => {
+      const current = layerLookup(id);
+      if (!current || !current.playlistId) return;
+
+      if (!entries.length) {
+        setLayerError(
+          refs,
+          'Die Playlist konnte nicht in eine Queue übernommen werden — sie ist vermutlich privat oder leer.',
+          layerWatchUrl(current)
+        );
+        return;
+      }
+
+      current.videoIds = entries;
+      current.playlistId = '';
+      // Hand the running player the explicit list, so it no longer depends on
+      // YouTube's playlist mode.
+      setLayerQueue(id, entries, { loop: current.loop, shuffle: current.shuffle });
+      renderQueue(current, refs, layerActions, titleForVideo);
+      entries.forEach((videoId) => {
+        fetchVideoTitle(videoId).then((title) => {
+          if (title) refreshQueue(id);
+        });
+      });
+      markDirty();
+    });
+  }
+
   function updateTrackLabel(id, refs) {
     const layer = layerLookup(id);
     if (!layer || !isPlaylist(layer)) return;
@@ -387,6 +428,10 @@
     // For a linked playlist the player only knows the current track's title —
     // the layer wants the list's own name, which oEmbed provides.
     const askPlayerFirst = !isLinkedPlaylist(layer);
+    // Captured now: adoptPlaylistAsQueue may clear the playlist id while this
+    // is in flight, and then the layer would be named after its first video
+    // instead of the playlist it came from.
+    const sourceUrl = layerWatchUrl(layer);
     const fromPlayer = askPlayerFirst ? fetchTitle(id, player) : Promise.resolve('');
 
     fromPlayer.then((title) => {
@@ -394,7 +439,7 @@
         applyFetchedTitle(id, title, refs);
         return;
       }
-      fetchOEmbedTitle(layerWatchUrl(layer), layer.provider).then((fetched) => {
+      fetchOEmbedTitle(sourceUrl, layer.provider).then((fetched) => {
         if (fetched) applyFetchedTitle(id, fetched, refs);
       });
     });
@@ -489,6 +534,9 @@
       const action = actionLookup(id);
       if (!action) return;
       action.volume = volume;
+      // Also push it into the running player — otherwise a change only took
+      // effect the next time the button was pressed.
+      setLayerVolume(id, volume);
       markDirty();
     },
     onRangeChange(id, raw) {

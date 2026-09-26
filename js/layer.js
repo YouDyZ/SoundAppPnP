@@ -377,8 +377,10 @@
     if (isSoundCloud(layer)) {
       refs.playlistBadge.textContent = layer.isSet ? '☁ SoundCloud-Set' : '☁ SoundCloud';
     } else {
+      // A YouTube playlist id only lives here until its videos are known —
+      // adoptPlaylistAsQueue turns it into the layer's own queue.
       refs.playlistBadge.textContent = linked
-        ? '☰ YouTube-Playlist'
+        ? '☰ Playlist wird übernommen…'
         : `☰ Playlist (${ids.length})`;
     }
     // SoundCloud's widget offers no shuffle, so the control is hidden there
