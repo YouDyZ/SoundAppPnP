@@ -193,8 +193,16 @@
    * user decides when a layer starts.
    */
   function applyPlaylistSettings(player, { playlistId, videoId, loop, shuffle }) {
-    try { player.setLoop(!!loop); } catch { /* ignore */ }
-    try { player.setShuffle(!!shuffle); } catch { /* ignore */ }
+    // Only when actually switched on: calling setLoop/setShuffle on a playlist
+    // the player has merely cued can reset it, which left the layer unable to
+    // start and its entries unreadable. The defaults are off anyway, so there
+    // is nothing to apply in that case.
+    if (loop) {
+      try { player.setLoop(true); } catch { /* ignore */ }
+    }
+    if (shuffle) {
+      try { player.setShuffle(true); } catch { /* ignore */ }
+    }
     if (!videoId) return;
     try {
       const entries = player.getPlaylist?.() || [];
@@ -219,8 +227,14 @@
           player.cueVideoById(videoIds[0]);
         }
       } catch { /* ignore */ }
-      try { player.setLoop(!!loop); } catch { /* ignore */ }
-      try { player.setShuffle(!!shuffle); } catch { /* ignore */ }
+      // Same care as in applyPlaylistSettings: only switch these on, never
+      // poke a freshly cued list with a pointless "off".
+      if (loop) {
+        try { player.setLoop(true); } catch { /* ignore */ }
+      }
+      if (shuffle) {
+        try { player.setShuffle(true); } catch { /* ignore */ }
+      }
     });
   }
 
@@ -230,7 +244,7 @@
    * is what lets a pasted playlist become an ordinary, editable queue without
    * needing a Data-API key.
    */
-  function resolvePlaylistEntries(id, callback, { attempts = 12, intervalMs = 300 } = {}) {
+  function resolvePlaylistEntries(id, callback, { attempts = 20, intervalMs = 400 } = {}) {
     const player = players.get(id);
     if (!player) return callback([]);
 
@@ -290,12 +304,30 @@
     }
   }
 
+  const PLAYING = 1;
+  const BUFFERING = 3;
+
   function playLayer(id, startSeconds = 0, { isPlaylist = false } = {}) {
     withPlayer(id, (player) => {
-      // Seeking a playlist layer would jump inside whichever video happens to
-      // be loaded, so the start point stays a single-video feature.
-      if (!isPlaylist) player.seekTo(startSeconds || 0, true);
-      player.playVideo();
+      if (!isPlaylist) {
+        // Seeking a playlist layer would jump inside whichever video happens
+        // to be loaded, so the start point stays a single-video feature.
+        player.seekTo(startSeconds || 0, true);
+        player.playVideo();
+        return;
+      }
+
+      try { player.playVideo(); } catch { /* ignore */ }
+      // A cued playlist sometimes ignores playVideo() because no entry is
+      // selected yet; picking the entry explicitly does start it.
+      setTimeout(() => {
+        try {
+          const state = player.getPlayerState?.();
+          if (state === PLAYING || state === BUFFERING) return;
+          const index = player.getPlaylistIndex?.();
+          player.playVideoAt(typeof index === 'number' && index >= 0 ? index : 0);
+        } catch { /* ignore */ }
+      }, 600);
     });
   }
 

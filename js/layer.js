@@ -52,6 +52,8 @@
       volume: clamp(Number.isFinite(raw.volume) ? raw.volume : 80, 0, 100),
       startSeconds: Number.isFinite(raw.startSeconds) ? Math.max(0, raw.startSeconds) : 0,
       isSet: !!raw.isSet,
+      // Transient: set when a playlist's videos could not be read yet.
+      adoptionFailed: !!raw.adoptionFailed,
       loop: !!raw.loop,
       shuffle: !!raw.shuffle,
       loopEnd: raw.loopEnd ?? null,
@@ -201,6 +203,11 @@
     const errorBadge = document.createElement('div');
     errorBadge.className = 'layer-error-badge';
 
+    // Neutral status line (not an error): used while a pasted playlist is being
+    // turned into this layer's queue, and when that did not work out.
+    const noticeBadge = document.createElement('div');
+    noticeBadge.className = 'layer-notice';
+
     const expandedPanel = document.createElement('div');
     expandedPanel.className = 'layer-expanded-panel';
 
@@ -305,7 +312,7 @@
     startRow.append(startLabel, setStartBtn);
     expandedPanel.append(playerWrapper, queueSection, playlistRow, startRow);
 
-    root.append(bar, errorBadge, expandedPanel);
+    root.append(bar, errorBadge, noticeBadge, expandedPanel);
 
     if (layer.isExpanded) {
       root.classList.add('expanded');
@@ -323,6 +330,7 @@
         playStopBtn,
         expandBtn,
         errorBadge,
+        noticeBadge,
         playerWrapper,
         playerContainer,
         startLabel,
@@ -376,12 +384,14 @@
     refs.playlistBadge.hidden = !isPlaylist(layer) && !isSoundCloud(layer);
     if (isSoundCloud(layer)) {
       refs.playlistBadge.textContent = layer.isSet ? '☁ SoundCloud-Set' : '☁ SoundCloud';
-    } else {
+    } else if (linked) {
       // A YouTube playlist id only lives here until its videos are known —
       // adoptPlaylistAsQueue turns it into the layer's own queue.
-      refs.playlistBadge.textContent = linked
-        ? '☰ Playlist wird übernommen…'
-        : `☰ Playlist (${ids.length})`;
+      refs.playlistBadge.textContent = layer.adoptionFailed
+        ? '☰ YouTube-Playlist'
+        : '☰ Playlist wird gelesen…';
+    } else {
+      refs.playlistBadge.textContent = `☰ Playlist (${ids.length})`;
     }
     // SoundCloud's widget offers no shuffle, so the control is hidden there
     // rather than shown as a button that silently does nothing.
@@ -431,6 +441,28 @@
     });
   }
 
+  /**
+   * Shows a neutral status line under the layer bar, optionally with a button
+   * (used to offer another attempt at reading a playlist's videos).
+   */
+  function setLayerNotice(refs, message, action) {
+    refs.noticeBadge.textContent = '';
+    if (!message) return;
+
+    const text = document.createElement('span');
+    text.textContent = message;
+    refs.noticeBadge.appendChild(text);
+
+    if (action) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn layer-notice-btn';
+      button.textContent = action.label;
+      button.addEventListener('click', action.onClick);
+      refs.noticeBadge.appendChild(button);
+    }
+  }
+
   function setQueueError(refs, message) {
     refs.queueError.textContent = message || '';
     refs.queueError.hidden = !message;
@@ -474,6 +506,7 @@
     layerWatchUrl,
     renderQueue,
     setQueueError,
+    setLayerNotice,
     setToggleUI,
     setTrackLabel,
     setLayerError,

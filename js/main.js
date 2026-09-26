@@ -28,6 +28,7 @@
     layerWatchUrl,
     renderQueue,
     setQueueError,
+    setLayerNotice,
     setToggleUI,
     setTrackLabel,
     setLayerError,
@@ -77,6 +78,7 @@
   const layerRefs = new Map(); // id -> { root, refs } from buildLayerElement
   const videoTitles = new Map(); // videoId -> title, for the per-layer queue list
   const actionRefs = new Map(); // action id -> { root, refs } from buildActionElement
+  const playlistAdoption = new Map(); // layer id -> 'pending' | 'failed'
 
   const els = {
     layersList: document.getElementById('layers-list'),
@@ -338,6 +340,9 @@
           setPlayingUI(refs, isPlaying);
           // The playlist moves on by itself, so refresh which entry is loaded.
           updateTrackLabel(layer.id, refs);
+          // Once something is actually playing, YouTube knows the playlist's
+          // entries — a good moment for another go at adopting them.
+          if (isPlaying) adoptPlaylistAsQueue(layer.id, refs, { retry: true });
         },
         onError: (event) => {
           const message = event.data === 'soundcloud'
@@ -362,6 +367,7 @@
   }
 
   function unmountLayer(id) {
+    playlistAdoption.delete(id);
     destroyPlayer(id);
     layerRefs.get(id)?.root.remove();
     layerRefs.delete(id);
@@ -374,28 +380,49 @@
    * trimmable, extendable. The playlist id is dropped so nothing stays tied to
    * YouTube's own ordering.
    */
-  function adoptPlaylistAsQueue(id, refs) {
+  function adoptPlaylistAsQueue(id, refs, { retry = false } = {}) {
     const layer = layerLookup(id);
     if (!layer || !layer.playlistId) return;
 
+    const status = playlistAdoption.get(id);
+    if (status === 'pending') return;
+    if (status === 'failed' && !retry) return;
+
+    playlistAdoption.set(id, 'pending');
+    layer.adoptionFailed = false;
+    renderQueue(layer, refs, layerActions, titleForVideo);
+    setLayerNotice(refs, 'Die Videos der Playlist werden gelesen…');
+
     resolvePlaylistEntries(id).then((entries) => {
       const current = layerLookup(id);
-      if (!current || !current.playlistId) return;
+      if (!current || !current.playlistId) {
+        playlistAdoption.delete(id);
+        return;
+      }
 
       if (!entries.length) {
-        setLayerError(
+        // Not fatal: the layer still plays the playlist through YouTube. The
+        // entries usually become readable once playback has started, so the
+        // attempt is repeated then — and can be triggered by hand.
+        playlistAdoption.set(id, 'failed');
+        current.adoptionFailed = true;
+        renderQueue(current, refs, layerActions, titleForVideo);
+        setLayerNotice(
           refs,
-          'Die Playlist konnte nicht in eine Queue übernommen werden — sie ist vermutlich privat oder leer.',
-          layerWatchUrl(current)
+          'Die Videoliste ließ sich noch nicht lesen. Die Ebene spielt die Playlist in YouTubes Reihenfolge; beim Abspielen wird es erneut versucht.',
+          { label: 'Erneut versuchen', onClick: () => adoptPlaylistAsQueue(id, refs, { retry: true }) }
         );
         return;
       }
 
+      playlistAdoption.delete(id);
       current.videoIds = entries;
       current.playlistId = '';
+      current.adoptionFailed = false;
       // Hand the running player the explicit list, so it no longer depends on
       // YouTube's playlist mode.
       setLayerQueue(id, entries, { loop: current.loop, shuffle: current.shuffle });
+      setLayerNotice(refs, '');
       renderQueue(current, refs, layerActions, titleForVideo);
       entries.forEach((videoId) => {
         fetchVideoTitle(videoId).then((title) => {

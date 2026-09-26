@@ -827,3 +827,21 @@ button, input, select {
 .action-player-host iframe { width: 100%; height: 100%; border: 0; }
 
 .sc-widget { width: 100%; height: 100%; border: 0; }
+
+.layer-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 0 0.9rem 0.5rem;
+}
+
+.layer-notice:empty { display: none; }
+
+.layer-notice-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+}

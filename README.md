@@ -73,8 +73,11 @@ müsste oder könnte. Der "Bei YouTube anmelden"-Button in der Seitenleiste
   sich sortieren (▲▼), kürzen (✕) und erweitern lässt:
   1. *YouTube-Playlist einfügen* — `playlist?list=…` oder ein
      `watch?v=…&list=…`-Link. Die App lädt die Playlist kurz, liest ihre Videos
-     aus und übernimmt sie als Queue („☰ Playlist wird übernommen…“ →
-     „☰ Playlist (n)“). Danach hängt nichts mehr an YouTubes Reihenfolge; der
+     aus und übernimmt sie als Queue („☰ Playlist wird gelesen…“ →
+     „☰ Playlist (n)“). Klappt das nicht sofort — YouTube gibt die Videoliste
+     mitunter erst preis, wenn etwas läuft —, sagt die Ebene das, spielt
+     solange in YouTubes Reihenfolge weiter und versucht es beim Abspielen
+     erneut; daneben steht ein „Erneut versuchen“-Knopf. Danach hängt nichts mehr an YouTubes Reihenfolge; der
      Name der Playlist bleibt als Ebenenname erhalten.
   2. *Selbst zusammenstellen* — Ebene aufklappen und unter „Weiteres Video an
      diese Ebene anhängen…“ beliebig viele Videos hinzufügen. Ab zwei Videos
@@ -152,8 +155,9 @@ Link, um das Video direkt auf YouTube zu öffnen.
   Mixe/Radios (`list=RD…`) lassen sich nicht einbetten. Enthält ein
   Video-Link zusätzlich so eine Liste, wird nur das Video übernommen.
 - Eine Playlist lässt sich nur übernehmen, solange der Player ihre Videos
-  nennen kann — bei einer privaten oder leeren Playlist meldet die Ebene das,
-  statt still nichts zu tun.
+  nennen kann. Bis dahin — und bei einer privaten oder leeren Playlist
+  dauerhaft — bleibt sie in YouTubes Reihenfolge und ist nicht sortierbar;
+  die Ebene sagt das an, statt still nichts zu tun.
 - Manche Videos deaktivieren die Einbettung von Seiten Dritter — die App zeigt
   das dann pro Ebene an, statt stillschweigend nichts abzuspielen.
 - Ohne HTTP-Server (also über `file://`) ist keine Wiedergabe möglich, siehe
